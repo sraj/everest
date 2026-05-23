@@ -1,0 +1,202 @@
+@reference "tailwindcss";
+
+.tiptap-editor {
+  @apply min-h-[500px] px-6 py-4 text-neutral-900 dark:text-neutral-100;
+  @apply focus:outline-none;
+  @apply text-base leading-relaxed;
+  @apply m-auto bg-white mt-4;
+}
+
+.tiptap-editor p.is-editor-empty:first-child::before {
+  @apply float-left h-0 pointer-events-none;
+  @apply text-neutral-400 dark:text-neutral-500;
+  content: attr(data-placeholder);
+}
+
+.tiptap-editor ::selection {
+  @apply bg-blue-100 dark:bg-blue-900/50;
+}
+
+/* Headings */
+.tiptap-editor h1 {
+  @apply text-3xl font-bold mt-8 mb-4 leading-tight;
+  @apply text-neutral-900 dark:text-white;
+}
+
+.tiptap-editor h2 {
+  @apply text-2xl font-semibold mt-6 mb-3 leading-snug;
+  @apply text-neutral-900 dark:text-white;
+}
+
+.tiptap-editor h3 {
+  @apply text-xl font-semibold mt-5 mb-2 leading-snug;
+  @apply text-neutral-800 dark:text-neutral-100;
+}
+
+.tiptap-editor h4 {
+  @apply text-lg font-medium mt-4 mb-2;
+  @apply text-neutral-800 dark:text-neutral-200;
+}
+
+.tiptap-editor p {
+  @apply mb-4;
+}
+
+/* Regular lists */
+.tiptap-editor ul {
+  @apply list-disc pl-6 my-4 space-y-1;
+}
+
+.tiptap-editor ol {
+  @apply list-decimal pl-6 my-4 space-y-1;
+}
+
+.tiptap-editor li {
+  @apply pl-1;
+}
+
+.tiptap-editor li p {
+  @apply mb-0;
+}
+
+.tiptap-editor ul ul,
+.tiptap-editor ol ol,
+.tiptap-editor ul ol,
+.tiptap-editor ol ul {
+  @apply my-1;
+}
+
+/* Task list */
+.tiptap-editor ul[data-type="taskList"] {
+  @apply list-none pl-0;
+}
+
+.tiptap-editor ul[data-type="taskList"] li {
+  @apply flex items-start gap-2 my-1;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label {
+  @apply flex-none mt-0.5;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > label input[type="checkbox"] {
+  @apply size-4 rounded border-neutral-300 text-blue-600 focus:ring-blue-500 dark:border-neutral-600;
+  cursor: pointer;
+}
+
+.tiptap-editor ul[data-type="taskList"] li[data-checked="true"] > div > p {
+  @apply line-through text-neutral-400 dark:text-neutral-500;
+}
+
+.tiptap-editor ul[data-type="taskList"] li > div {
+  @apply flex-1;
+}
+
+/* Blockquote */
+.tiptap-editor blockquote {
+  @apply border-l-4 border-neutral-300 dark:border-neutral-600;
+  @apply pl-4 my-4 italic;
+  @apply text-neutral-600 dark:text-neutral-400;
+}
+
+/* Inline code */
+.tiptap-editor code {
+  @apply bg-neutral-100 dark:bg-neutral-800;
+  @apply text-pink-600 dark:text-pink-400;
+  @apply px-1.5 py-0.5 rounded text-sm;
+  @apply font-mono;
+}
+
+/* Code block */
+.tiptap-editor pre {
+  @apply bg-neutral-900 dark:bg-neutral-950;
+  @apply text-neutral-100;
+  @apply p-4 rounded-lg my-4;
+  @apply overflow-x-auto;
+  @apply font-mono text-sm leading-relaxed;
+}
+
+.tiptap-editor pre code {
+  @apply bg-transparent text-inherit p-0 rounded-none text-inherit;
+}
+
+/* Highlight / Mark */
+.tiptap-editor mark {
+  @apply text-inherit rounded-sm px-0.5;
+}
+
+/* Horizontal rule */
+.tiptap-editor hr {
+  @apply border-0 border-t border-neutral-200 dark:border-neutral-700;
+  @apply my-8;
+}
+
+/* Links */
+.tiptap-editor a {
+  @apply text-blue-600 dark:text-blue-400;
+  @apply underline underline-offset-2;
+  @apply hover:text-blue-700 dark:hover:text-blue-300;
+  @apply cursor-pointer;
+}
+
+/* Strong / Bold */
+.tiptap-editor strong {
+  @apply font-semibold;
+}
+
+/* Emphasis / Italic */
+.tiptap-editor em {
+  @apply italic;
+}
+
+/* Strikethrough */
+.tiptap-editor s {
+  @apply line-through;
+}
+
+/* Underline */
+.tiptap-editor u {
+  @apply underline;
+}
+
+/* Superscript / Subscript */
+.tiptap-editor sup {
+  @apply text-[0.75em] leading-none;
+  vertical-align: super;
+}
+
+.tiptap-editor sub {
+  @apply text-[0.75em] leading-none;
+  vertical-align: sub;
+}
+
+/* Text alignment */
+.tiptap-editor [style*="text-align: center"] {
+  @apply text-center;
+}
+
+.tiptap-editor [style*="text-align: right"] {
+  @apply text-right;
+}
+
+.tiptap-editor [style*="text-align: justify"] {
+  @apply text-justify;
+}
+
+/* Image */
+.tiptap-editor img {
+  @apply max-w-full h-auto my-4 rounded-lg;
+}
+
+.tiptap-editor img.ProseMirror-selectednode {
+  @apply ring-2 ring-blue-500;
+}
+
+/* First / last element reset */
+.tiptap-editor > *:first-child {
+  @apply mt-0;
+}
+
+.tiptap-editor > *:last-child {
+  @apply mb-0;
+}

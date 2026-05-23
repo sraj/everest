@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Build artifacts
+bin/
+dist/
+
+# Dependencies
+vendor/
+
+# Web frontend (has its own Dockerfile)
+web/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Test artifacts
+coverage/
+*.test
+*.out
