@@ -2,6 +2,8 @@
 
 A Google Docs-like document management application with real-time document editing, thumbnail previews, and cloud storage.
 
+![](screenshot-1.png)![alt text](screenshot-2.png)
+
 ## Features
 
 - Rich text document editor with TipTap

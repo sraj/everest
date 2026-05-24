@@ -7,13 +7,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sraj/everest/internal/config"
 	"github.com/sraj/everest/internal/handler"
 	"github.com/sraj/everest/internal/infrastructure/minio"
 	"github.com/sraj/everest/internal/infrastructure/postgres"
-	"github.com/sraj/everest/pkg/logger"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/pkg/config"
 	"github.com/sraj/everest/pkg/dbx"
+	"github.com/sraj/everest/pkg/logger"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
