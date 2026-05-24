@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -145,10 +146,13 @@ func runMigrate(databaseURL, migrationsPath, command string, steps int) {
 
 	case "version":
 		version, dirty, err := m.Version()
-		if err != nil {
+		if errors.Is(err, migrate.ErrNilVersion) {
+			fmt.Println("Version: 0, Dirty: false (no migrations applied)")
+		} else if err != nil {
 			log.Fatalf("Failed to get version: %v", err)
+		} else {
+			fmt.Printf("Version: %d, Dirty: %v\n", version, dirty)
 		}
-		fmt.Printf("Version: %d, Dirty: %v\n", version, dirty)
 
 	case "force":
 		if steps == 0 {
