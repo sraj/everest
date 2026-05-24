@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -74,6 +75,15 @@ func slogToZerologLevel(lvl slog.Level) zerolog.Level {
 
 // New creates a new slog logger backed by zerolog's pretty ConsoleWriter
 func New(level string, serviceName string) *slog.Logger {
+	return newLogger(level, serviceName, true)
+}
+
+// NewJSON creates a new slog logger backed by zerolog's raw JSON output
+func NewJSON(level string, serviceName string) *slog.Logger {
+	return newLogger(level, serviceName, false)
+}
+
+func newLogger(level string, serviceName string, console bool) *slog.Logger {
 	var lvl slog.Level
 	switch strings.ToLower(level) {
 	case "debug":
@@ -88,10 +98,15 @@ func New(level string, serviceName string) *slog.Logger {
 		lvl = slog.LevelInfo
 	}
 
-	output := zerolog.ConsoleWriter{
-		Out:        os.Stdout,
-		TimeFormat: time.RFC3339,
-		NoColor:    false,
+	var output io.Writer
+	if console {
+		output = zerolog.ConsoleWriter{
+			Out:        os.Stdout,
+			TimeFormat: time.RFC3339,
+			NoColor:    false,
+		}
+	} else {
+		output = os.Stdout
 	}
 
 	zlog := zerolog.New(output).
