@@ -1,5 +1,3 @@
--- Add thumbnail_id column to documents table
-ALTER TABLE documents ADD COLUMN thumbnail_id UUID;
-
--- Create index for faster thumbnail lookups
-CREATE INDEX idx_documents_thumbnail_id ON documents(thumbnail_id);
+-- thumbnail_id is now part of the base schema in 000001
+-- This migration is kept as a no-op for version tracking.
+-- Index is also created in 000001.

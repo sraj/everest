@@ -3,9 +3,9 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Users table
+-- Users table (managed by Zitadel; id is the Zitadel sub claim)
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id VARCHAR(255) PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
     name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -16,8 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS documents (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     title VARCHAR(500) NOT NULL,
-    owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    content_id UUID NOT NULL,  -- MinIO object key
+    owner_id VARCHAR(255) NOT NULL,
+    content_id VARCHAR(255) NOT NULL,  -- MinIO object key
+    thumbnail_id VARCHAR(255),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -26,7 +27,7 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE TABLE IF NOT EXISTS document_permissions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) NOT NULL,
     role VARCHAR(50) NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(document_id, user_id)

@@ -20,6 +20,12 @@ type zerologHandler struct {
 func (h *zerologHandler) Handle(_ context.Context, r slog.Record) error {
 	evt := h.logger.WithLevel(slogToZerologLevel(r.Level))
 	r.Attrs(func(a slog.Attr) bool {
+		if a.Key == "error" && a.Value.Kind() == slog.KindAny {
+			if err, ok := a.Value.Any().(error); ok {
+				evt = evt.Err(err)
+				return true
+			}
+		}
 		switch a.Value.Kind() {
 		case slog.KindString:
 			evt = evt.Str(a.Key, a.Value.String())

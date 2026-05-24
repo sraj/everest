@@ -25,6 +25,10 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
+
+	// Zitadel (OIDC Authentication)
+	ZitadelIssuer   string
+	ZitadelClientID string
 }
 
 // Load loads configuration from environment variables
@@ -43,6 +47,8 @@ func Load() *Config {
 		MinIOSecretKey: getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinIOBucket:    getEnv("MINIO_BUCKET", "documents"),
 		MinIOUseSSL:    getEnv("MINIO_USE_SSL", "false") == "true",
+		ZitadelIssuer:   getEnv("ZITADEL_ISSUER", "http://localhost:8082"),
+		ZitadelClientID: getEnv("ZITADEL_CLIENT_ID", ""),
 	}
 }
 

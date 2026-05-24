@@ -6,21 +6,27 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/sraj/everest/internal/infrastructure/zitadel"
 	"github.com/sraj/everest/internal/service"
 )
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	docService *service.DocumentService
-	log        *slog.Logger
+	docService     *service.DocumentService
+	log            *slog.Logger
+	authMiddleware fiber.Handler
 }
 
 // New creates a new handler with dependencies
-func New(docService *service.DocumentService, log *slog.Logger) *Handler {
-	return &Handler{
+func New(docService *service.DocumentService, log *slog.Logger, authMiddleware ...fiber.Handler) *Handler {
+	h := &Handler{
 		docService: docService,
 		log:        log,
 	}
+	if len(authMiddleware) > 0 {
+		h.authMiddleware = authMiddleware[0]
+	}
+	return h
 }
 
 // RegisterRoutes registers all HTTP routes
@@ -28,16 +34,28 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	// Health check
 	app.Get("/health", h.healthCheck)
 
+	// OIDC Auth routes
+	if h.authMiddleware != nil {
+		auth := app.Group("/auth")
+		auth.Post("/verify", h.authMiddleware, h.handleVerify)
+		auth.Get("/me", h.authMiddleware, h.handleMe)
+	}
+
 	// API v1 routes
 	api := app.Group("/api/v1")
 
-	// Document routes
+	// Thumbnail endpoint (public — loaded via <img> tags, no auth headers sent)
+	api.Get("/documents/:id/thumbnail", h.getDocumentThumbnail)
+
+	// Document routes (protected by auth when available)
 	docs := api.Group("/documents")
+	if h.authMiddleware != nil {
+		docs.Use(h.authMiddleware)
+	}
 	docs.Get("/", h.listDocuments)
 	docs.Post("/", h.createDocument)
 	docs.Get("/:id", h.getDocument)
 	docs.Get("/:id/download", h.downloadDocument)
-	docs.Get("/:id/thumbnail", h.getDocumentThumbnail)
 	docs.Put("/:id", h.updateDocument)
 	docs.Delete("/:id", h.deleteDocument)
 }
@@ -86,7 +104,13 @@ type DocumentResponse struct {
 func (h *Handler) listDocuments(c *fiber.Ctx) error {
 	ctx := c.Context()
 
-	docs, err := h.docService.ListDocuments(ctx, 100, 0)
+	// Extract owner ID from auth context if available
+	var ownerID string
+	if user, ok := c.Locals("user").(zitadel.IntrospectUser); ok {
+		ownerID = user.Sub
+	}
+
+	docs, err := h.docService.ListDocuments(ctx, ownerID, 100, 0)
 	if err != nil {
 		h.log.Error("failed to list documents", "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -103,7 +127,7 @@ func (h *Handler) listDocuments(c *fiber.Ctx) error {
 			CreatedAt: doc.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt: doc.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
-		if doc.ThumbnailID != "" {
+		if doc.ThumbnailID != nil && *doc.ThumbnailID != "" {
 			resp.ThumbnailURL = "/api/v1/documents/" + doc.ID + "/thumbnail"
 		}
 		responses = append(responses, resp)
@@ -182,9 +206,14 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 		fileContentType = "text/html"
 	}
 
+	ownerID := ""
+	if user, ok := c.Locals("user").(zitadel.IntrospectUser); ok {
+		ownerID = user.Sub
+	}
+
 	doc, err := h.docService.CreateDocument(c.Context(), service.CreateDocumentInput{
 		Title:       title,
-		OwnerID:     "00000000-0000-0000-0000-000000000001", // TODO: Get from auth
+		OwnerID:     ownerID,
 		Content:     content,
 		ContentType: fileContentType,
 	})

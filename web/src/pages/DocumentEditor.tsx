@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Editor } from '../components/editor'
+import { useAuth } from '../auth/AuthProvider'
 
 export function DocumentEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { isAuthenticated, isLoading, login, getAccessToken } = useAuth()
   const isNew = id === 'new'
 
   const [title, setTitle] = useState('')
@@ -13,32 +15,59 @@ export function DocumentEditor() {
   const [loading, setLoading] = useState(!isNew)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      login()
+    }
+  }, [isLoading, isAuthenticated, login])
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    )
+  }
+
   // Load existing document
   useEffect(() => {
-    if (!isNew && id) {
+    if (!isNew && id && isAuthenticated) {
       setLoading(true)
-      fetch(`/api/v1/documents/${id}`)
-        .then((res) => res.json())
+      const token = getAccessToken()
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      fetch(`/api/v1/documents/${id}`, { headers })
+        .then((res) => {
+          if (!res.ok) throw new Error('Failed to load document')
+          return res.json()
+        })
         .then((data) => {
           setTitle(data.title || '')
           setContent(data.content || '')
         })
-        .catch((err) => console.error('Failed to load document:', err))
+        .catch((err) => {
+          console.error('Failed to load document:', err)
+          navigate('/', { replace: true })
+        })
         .finally(() => setLoading(false))
     }
-  }, [id, isNew])
+  }, [id, isNew, isAuthenticated, getAccessToken, navigate])
 
   const handleSave = async () => {
     setSaving(true)
     try {
       const url = isNew ? '/api/v1/documents' : `/api/v1/documents/${id}`
       const method = isNew ? 'POST' : 'PUT'
+      const token = getAccessToken()
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      if (token) headers['Authorization'] = `Bearer ${token}`
 
       const response = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ title: title || 'Untitled Document', content }),
       })
 

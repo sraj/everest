@@ -151,8 +151,8 @@ func (s *DocumentService) DeleteDocument(ctx context.Context, id string) error {
 	}
 
 	// Delete thumbnail from MinIO
-	if doc.ThumbnailID != "" {
-		if err := s.contentRepo.Delete(ctx, doc.ThumbnailID); err != nil {
+	if doc.ThumbnailID != nil && *doc.ThumbnailID != "" {
+		if err := s.contentRepo.Delete(ctx, *doc.ThumbnailID); err != nil {
 			s.log.Error("failed to delete document thumbnail", "error", err)
 			// Continue with document deletion
 		}
@@ -161,8 +161,12 @@ func (s *DocumentService) DeleteDocument(ctx context.Context, id string) error {
 	return s.docRepo.Delete(ctx, id)
 }
 
-// ListDocuments lists documents with pagination
-func (s *DocumentService) ListDocuments(ctx context.Context, limit, offset int) ([]*model.Document, error) {
+// ListDocuments lists documents with pagination.
+// If ownerID is non-empty, only documents owned by that user are returned.
+func (s *DocumentService) ListDocuments(ctx context.Context, ownerID string, limit, offset int) ([]*model.Document, error) {
+	if ownerID != "" {
+		return s.docRepo.GetByOwnerID(ctx, ownerID)
+	}
 	return s.docRepo.List(ctx, limit, offset)
 }
 
@@ -173,11 +177,11 @@ func (s *DocumentService) GetDocumentThumbnail(ctx context.Context, id string) (
 		return nil, err
 	}
 
-	if doc.ThumbnailID == "" {
+	if doc.ThumbnailID == nil || *doc.ThumbnailID == "" {
 		return nil, nil // No thumbnail available
 	}
 
-	return s.contentRepo.Get(ctx, doc.ThumbnailID)
+	return s.contentRepo.Get(ctx, *doc.ThumbnailID)
 }
 
 // generateAndSaveThumbnail generates a thumbnail and saves it to storage
@@ -201,7 +205,10 @@ func (s *DocumentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	// Generate thumbnail ID or reuse existing one
-	thumbnailID := doc.ThumbnailID
+	thumbnailID := ""
+	if doc.ThumbnailID != nil {
+		thumbnailID = *doc.ThumbnailID
+	}
 	if thumbnailID == "" {
 		thumbnailID = uuid.New().String()
 	}
@@ -213,7 +220,7 @@ func (s *DocumentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	// Update document with thumbnail ID
-	doc.ThumbnailID = thumbnailID
+	doc.ThumbnailID = &thumbnailID
 	doc.UpdatedAt = time.Now()
 	if err := s.docRepo.Update(ctx, doc); err != nil {
 		s.log.Error("failed to update document with thumbnail", "error", err, "doc_id", docID)

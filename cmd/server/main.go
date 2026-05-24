@@ -10,6 +10,7 @@ import (
 	"github.com/sraj/everest/internal/handler"
 	"github.com/sraj/everest/internal/infrastructure/minio"
 	"github.com/sraj/everest/internal/infrastructure/postgres"
+	"github.com/sraj/everest/internal/infrastructure/zitadel"
 	"github.com/sraj/everest/internal/service"
 	"github.com/sraj/everest/pkg/config"
 	"github.com/sraj/everest/pkg/dbx"
@@ -73,8 +74,22 @@ func main() {
 	// Create services
 	docService := service.NewDocumentService(docRepo, contentRepo, thumbnailSvc, log)
 
+	// Initialize Zitadel OIDC auth verifier
+	var authMiddleware fiber.Handler
+	if cfg.ZitadelClientID != "" && cfg.ZitadelClientID != "<created-in-zitadel-console>" {
+		verifier, err := zitadel.NewVerifier(cfg.ZitadelIssuer, log)
+		if err != nil {
+			log.Error("Zitadel verifier initialization failed, continuing without auth", "error", err)
+		} else {
+			authMiddleware = verifier.Middleware()
+			log.Info("Zitadel authentication enabled", "issuer", cfg.ZitadelIssuer)
+		}
+	} else {
+		log.Info("Zitadel authentication disabled (no ZITADEL_CLIENT_ID configured)")
+	}
+
 	// Create handler
-	h := handler.New(docService, log)
+	h := handler.New(docService, log, authMiddleware)
 
 	// Create Fiber app
 	app := fiber.New(fiber.Config{

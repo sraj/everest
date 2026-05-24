@@ -14,6 +14,14 @@ export default defineConfig({
         target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/auth/verify': {
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+      },
+      '/auth/me': {
+        target: process.env.VITE_API_URL || 'http://localhost:8080',
+        changeOrigin: true,
+      },
     },
   },
 })

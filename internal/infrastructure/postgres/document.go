@@ -20,7 +20,7 @@ func NewDocumentRepository(db *dbx.DB) repository.DocumentRepository {
 func (r *documentRepository) Create(ctx context.Context, doc *model.Document) error {
 	_, err := r.db.Insert("documents").
 		Columns("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
-		Values(doc.ID, doc.Title, doc.OwnerID, doc.ContentID, nullString(doc.ThumbnailID), doc.CreatedAt, doc.UpdatedAt).
+		Values(doc.ID, doc.Title, doc.OwnerID, doc.ContentID, nullString(thumbnailVal(doc.ThumbnailID)), doc.CreatedAt, doc.UpdatedAt).
 		Exec(ctx)
 	return err
 }
@@ -53,7 +53,7 @@ func (r *documentRepository) GetByOwnerID(ctx context.Context, ownerID string) (
 func (r *documentRepository) Update(ctx context.Context, doc *model.Document) error {
 	err := r.db.Update("documents").
 		Set("title", doc.Title).
-		Set("thumbnail_id", nullString(doc.ThumbnailID)).
+		Set("thumbnail_id", nullString(thumbnailVal(doc.ThumbnailID))).
 		Set("updated_at", doc.UpdatedAt).
 		Where(dbx.Cond.Eq("id", doc.ID)).
 		ExecMustAffect(ctx)
@@ -85,4 +85,11 @@ func nullString(s string) interface{} {
 		return nil
 	}
 	return s
+}
+
+func thumbnailVal(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
