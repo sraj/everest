@@ -26,22 +26,27 @@ func DefaultThumbnailConfig() ThumbnailConfig {
 	}
 }
 
-// ThumbnailService handles document thumbnail generation
-type ThumbnailService struct {
+// ThumbnailService defines the interface for thumbnail generation
+type ThumbnailService interface {
+	GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error)
+}
+
+// thumbnailService handles document thumbnail generation
+type thumbnailService struct {
 	config ThumbnailConfig
 	log    *slog.Logger
 }
 
 // NewThumbnailService creates a new thumbnail service
-func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) *ThumbnailService {
-	return &ThumbnailService{
+func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) ThumbnailService {
+	return &thumbnailService{
 		config: config,
 		log:    log,
 	}
 }
 
 // GenerateFromHTML renders HTML content and captures a screenshot as PNG
-func (s *ThumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error) {
+func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error) {
 	// Create a timeout context for the browser operation
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -84,7 +89,7 @@ func (s *ThumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []b
 
 // wrapHTML ensures the HTML content is a complete document with proper styling
 // Styled to look like a Google Docs document page
-func (s *ThumbnailService) wrapHTML(content []byte) string {
+func (s *thumbnailService) wrapHTML(content []byte) string {
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>

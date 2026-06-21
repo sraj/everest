@@ -28,6 +28,9 @@ export const fetchDocuments = createAsyncThunk(
   'documents/fetchDocuments',
   async () => {
     const response = await fetch('/api/v1/documents')
+    if (!response.ok) {
+      throw new Error('Failed to fetch documents')
+    }
     const data = await response.json()
     return data.documents as Document[]
   }

@@ -7,12 +7,12 @@ import { PageSizePopover } from './PageSizePopover'
 import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { FontSizeDropdown } from './FontSizeDropdown'
 import { LineSpacingDropdown } from './LineSpacingDropdown'
+import { HeadingDropdown } from './HeadingDropdown'
 import { ALL_PAGE_SIZES } from '../extensions'
 import type { PageSizeKey } from '../extensions'
 import {
   Undo, Redo, Bold, Italic, Underline, Strikethrough,
   SuperscriptIcon, SubscriptIcon, Image as ImageIcon,
-  Heading1, Heading2, Heading3,
   BulletList, OrderedList, TaskList,
   Blockquote, Code,
   AlignLeft, AlignCenter, AlignRight, Printer,
@@ -158,15 +158,7 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
         <ToolbarDivider />
 
         {/* Headings */}
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive('heading', { level: 1 })} title="Heading 1">
-          <Heading1 />
-        </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive('heading', { level: 2 })} title="Heading 2">
-          <Heading2 />
-        </ToolbarButton>
-        <ToolbarButton onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive('heading', { level: 3 })} title="Heading 3">
-          <Heading3 />
-        </ToolbarButton>
+        <HeadingDropdown editor={editor} />
 
         <ToolbarDivider />
 

@@ -382,9 +382,55 @@ err := db.Tx(ctx, func(tx *dbx.TxDB) error {
 // Auto-rollback on error or panic.
 ```
 
+## CTE (Common Table Expressions)
+
+```go
+// WithCTE builder — chain CTEs then call Select.
+type Report struct {
+    Region      string  `db:"region"`
+    TotalSales  float64 `db:"total_sales"`
+    OrderCount  int     `db:"order_count"`
+}
+var reports []Report
+err := db.WithCTE().
+    WithCTE("regional_sales",
+        `SELECT region, SUM(amount) AS total FROM orders GROUP BY region`).
+    WithCTE("top_regions",
+        `SELECT region FROM regional_sales WHERE total > 10000`).
+    Select("r.region", "r.total AS total_sales", "COUNT(o.id) AS order_count").
+    From("regional_sales r").
+    Join("orders o ON o.region = r.region").
+    Where(dbx.Cond.In("r.region", sq.Expr("SELECT region FROM top_regions"))).
+    GroupBy("r.region", "r.total").
+    OrderBy("total_sales", dbx.DESC).
+    All(ctx, &reports)
+
+// CTE from a SelectBuilder.
+subQuery := db.Select("region", "SUM(amount) AS total").
+    From("orders").
+    GroupBy("region")
+
+var regions []RegionTotal
+err := db.WithCTE().
+    WithSelectCTE("order_totals", subQuery).
+    Select("region", "total").
+    From("order_totals").
+    Where(dbx.Cond.Gt("total", 5000)).
+    All(ctx, &regions)
+
+// Inline CTE via SelectBuilder.WithCTE.
+var activeAdmins []User
+err := db.Select("id", "name", "email").
+    WithCTE("admin_users",
+        `SELECT id FROM users WHERE role = 'admin' AND active = true`).
+    From("users").
+    Join("admin_users a ON a.id = users.id").
+    All(ctx, &activeAdmins)
+```
+
 ## Raw SQL (escape hatch)
 
-For queries squirrel can't express (CTEs, window functions, etc.):
+For queries squirrel can't express (window functions, recursive CTEs, etc.):
 
 ```go
 var count int
@@ -446,20 +492,20 @@ The following improvements would make `dbx` suitable for large-scale enterprise 
 - **Schema introspection** — `Table(name)` helper that returns columns, types, nullable, and foreign keys for codegen and dynamic queries
 
 ### Query features
+- ~~**CTE builder**~~ — implemented; see CTE section above
 - **Bulk insert** — `Insert("table").Values(row1, row2, ...)` that batches into chunks of 500 with `COPY` fallback for >1000 rows
-- **Upsert** — first-class `OnConflict` builder (not a `Suffix` hack) with `DoNothing()` and `DoUpdate(setMap)` helpers
-- **CTE builder** — `With("cte_name", subQuery)` that prefixes the main statement with `WITH …`; chainable, composable
+- **Upsert** — `OnConflict` is available; `DoNothing()` and `DoUpdate(setMap)` helpers would make it first-class
 - **Window function helpers** — `Over(partition, order)` on aggregate columns
 - **JSONB operators** — `Cond.JsonContains`, `Cond.JsonPath`, `Cond.HasKey` that generate `@>`, `#>>`, `?` etc.
 - **Array operators** — `Cond.Overlaps`, `Cond.Contains` for PostgreSQL array `&&` and `@>` operators
 
 ### Advanced features
+- ~~**Batch processing**~~ — `Each()` is implemented; yields rows one-by-one without loading entire result set
 - **Soft delete** — `SoftDelete() SelectBuilder` that injects `WHERE deleted_at IS NULL`; `Deleted()` shows soft-deleted rows
 - **Optimistic locking** — `Where(dbx.Cond.Eq("version", version))` on update with version auto-increment; return `ErrConflict` on stale write
 - **Audit columns** — optional auto-population of `created_at`, `updated_at`, `created_by`, `updated_by` on insert/update
 - **Multi-tenant isolation** — `WithTenant(tenantID)` that injects `AND tenant_id = $N` on every query via a wrapping builder
 - **Encrypted columns** — transparent `SetEncrypted(col, plaintext, key)` / `DecryptedColumn(col, key)` for pii columns at rest
-- **Batch processing** — `Each()` cursor that yields rows one-by-one with a configurable fetch-ahead buffer (avoids loading entire result set)
 
 ### Performance
 - **Prepared statement caching** — expose `sqlx.Prepare` / `PrepareNamed` through the builder; cache parsed statements per connection

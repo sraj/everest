@@ -1,22 +1,25 @@
-package handler
+package http
 
 import (
 	"io"
 	"log/slog"
 	"strings"
 
+	"strconv"
+
 	"github.com/gofiber/fiber/v2"
+	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/service"
 )
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	docService *service.DocumentService
+	docService service.DocumentService
 	log        *slog.Logger
 }
 
 // New creates a new handler with dependencies
-func New(docService *service.DocumentService, log *slog.Logger) *Handler {
+func New(docService service.DocumentService, log *slog.Logger) *Handler {
 	return &Handler{
 		docService: docService,
 		log:        log,
@@ -86,31 +89,42 @@ type DocumentResponse struct {
 func (h *Handler) listDocuments(c *fiber.Ctx) error {
 	ctx := c.Context()
 
-	docs, err := h.docService.ListDocuments(ctx, 100, 0)
+	page := model.DefaultPage()
+	if p, err := strconv.Atoi(c.Query("page", "1")); err == nil && p > 0 {
+		page.Number = p
+	}
+	if s, err := strconv.Atoi(c.Query("size", "20")); err == nil && s > 0 && s <= 100 {
+		page.Size = s
+	}
+
+	result, err := h.docService.List(ctx, page)
 	if err != nil {
-		h.log.Error("failed to list documents", "error", err)
+		h.log.Error("failed to list documents", "error", err.Error())
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to list documents",
+			"error": "Failed to list documents: " + err.Error(),
 		})
 	}
 
-	// Convert to response format (without content for list)
-	responses := make([]DocumentResponse, 0, len(docs))
-	for _, doc := range docs {
+	responses := make([]DocumentResponse, 0, len(result.Items))
+	for _, doc := range result.Items {
 		resp := DocumentResponse{
 			ID:        doc.ID,
 			Title:     doc.Title,
 			CreatedAt: doc.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 			UpdatedAt: doc.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		}
-		if doc.ThumbnailID != "" {
+		if doc.ThumbnailID != nil {
 			resp.ThumbnailURL = "/api/v1/documents/" + doc.ID + "/thumbnail"
 		}
 		responses = append(responses, resp)
 	}
 
 	return c.JSON(fiber.Map{
-		"documents": responses,
+		"documents":   responses,
+		"total":       result.Total,
+		"page":        result.Page,
+		"page_size":   result.PageSize,
+		"total_pages": result.TotalPages,
 	})
 }
 
@@ -182,7 +196,7 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 		fileContentType = "text/html"
 	}
 
-	doc, err := h.docService.CreateDocument(c.Context(), service.CreateDocumentInput{
+	doc, err := h.docService.Create(c.Context(), service.CreateDocumentInput{
 		Title:       title,
 		OwnerID:     "00000000-0000-0000-0000-000000000001", // TODO: Get from auth
 		Content:     content,
@@ -208,14 +222,14 @@ func (h *Handler) getDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ctx := c.Context()
 
-	doc, err := h.docService.GetDocument(ctx, id)
+	doc, err := h.docService.GetByID(ctx, id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Document not found",
 		})
 	}
 
-	content, err := h.docService.GetDocumentContent(ctx, id)
+	content, err := h.docService.GetContent(ctx, id)
 	if err != nil {
 		h.log.Error("failed to get document content", "error", err)
 		content = []byte{}
@@ -234,14 +248,14 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ctx := c.Context()
 
-	doc, err := h.docService.GetDocument(ctx, id)
+	doc, err := h.docService.GetByID(ctx, id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Document not found",
 		})
 	}
 
-	content, err := h.docService.GetDocumentContent(ctx, id)
+	content, err := h.docService.GetContent(ctx, id)
 	if err != nil {
 		h.log.Error("failed to get document content", "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
@@ -260,7 +274,7 @@ func (h *Handler) getDocumentThumbnail(c *fiber.Ctx) error {
 	id := c.Params("id")
 	ctx := c.Context()
 
-	thumbnail, err := h.docService.GetDocumentThumbnail(ctx, id)
+	thumbnail, err := h.docService.GetThumbnail(ctx, id)
 	if err != nil {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "Document not found",
@@ -330,7 +344,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 		content = []byte(req.Content)
 	}
 
-	doc, err := h.docService.UpdateDocument(c.Context(), service.UpdateDocumentInput{
+	doc, err := h.docService.Update(c.Context(), service.UpdateDocumentInput{
 		ID:      id,
 		Title:   title,
 		Content: content,
@@ -353,7 +367,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 func (h *Handler) deleteDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 
-	if err := h.docService.DeleteDocument(c.Context(), id); err != nil {
+	if err := h.docService.Delete(c.Context(), id); err != nil {
 		h.log.Error("failed to delete document", "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to delete document",

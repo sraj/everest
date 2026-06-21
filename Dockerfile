@@ -15,6 +15,9 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Resolve any new dependencies
+RUN go mod tidy
+
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o /app/server ./cmd/server
 
