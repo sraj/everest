@@ -113,6 +113,7 @@ func (v *Verifier) Middleware() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		auth := c.Get("Authorization")
 		if auth == "" {
+			v.log.Warn("missing authorization header", "path", c.Path(), "method", c.Method())
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "missing authorization header",
 			})
