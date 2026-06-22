@@ -60,7 +60,7 @@ func TestSelectBuilder_ToSQL_WithCTE(t *testing.T) {
 		ctes: []CTE{{name: "cte1", sql: "SELECT 1 AS id", args: nil}},
 	}
 
-	sql, _, err := sb.ToSQL()
+	sql, args, err := sb.ToSQL()
 	if err != nil {
 		t.Fatalf("ToSQL failed: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestBuildWithClause(t *testing.T) {
 		{name: "cte2", sql: "SELECT * FROM cte1", args: []any{}},
 	}
 
-	_, args := buildWithClause(ctes)
+	withClause, args := buildWithClause(ctes)
 
 	if withClause == "" {
 		t.Error("expected non-empty WITH clause")
@@ -108,7 +108,7 @@ func TestBuildWithClause_WithArgs(t *testing.T) {
 		{name: "cte1", sql: "SELECT * FROM table1 WHERE id = $1", args: []any{123}},
 	}
 
-	_, args := buildWithClause(ctes)
+	withClause, args := buildWithClause(ctes)
 
 	if len(args) != 1 {
 		t.Errorf("expected 1 arg, got %d", len(args))
