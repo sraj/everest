@@ -18,6 +18,9 @@ type Config struct {
 	MinIOBucket    string
 	MinIOUseSSL    bool
 	GRPCPort       string
+
+	ZitadelIssuer   string
+	ZitadelClientID string
 }
 
 func Load() *Config {
@@ -35,5 +38,7 @@ func Load() *Config {
 		MinIOBucket:    l.String("MINIO_BUCKET", "documents"),
 		MinIOUseSSL:    l.Bool("MINIO_USE_SSL", false),
 		GRPCPort:       l.String("GRPC_PORT", ""),
+		ZitadelIssuer:  l.String("ZITADEL_ISSUER", ""),
+		ZitadelClientID: l.String("ZITADEL_CLIENT_ID", ""),
 	}
 }
