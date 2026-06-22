@@ -1,6 +1,7 @@
 package zitadel
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -37,7 +38,7 @@ func NewVerifier(issuer, clientID string, log *slog.Logger) (*Verifier, error) {
 	}
 
 	wellKnown := issuer + "/.well-known/openid-configuration"
-	discovery, err := client.Discover(nil, "http://localhost:8082", httpClient, wellKnown)
+	discovery, err := client.Discover(context.Background(), "http://localhost:8082", httpClient, wellKnown)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +134,7 @@ func (v *Verifier) introspect(ctx any, token string) (*oidc.IntrospectionRespons
 	data.Set("token_type_hint", "access_token")
 	data.Set("client_id", v.clientID)
 
-	req, err := http.NewRequestWithContext(nil, "POST", v.introspectionURL, strings.NewReader(data.Encode()))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", v.introspectionURL, strings.NewReader(data.Encode()))
 	if err != nil {
 		return nil, err
 	}
