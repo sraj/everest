@@ -8,7 +8,7 @@ export function Home() {
   const dispatch = useAppDispatch()
   const { documents, loading, error } = useAppSelector((state) => state.documents)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const { isAuthenticated, getAccessToken } = useAuth()
+  const { isAuthenticated, getAccessToken, logout } = useAuth()
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -43,15 +43,23 @@ export function Home() {
               </svg>
               <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Everest Docs</h1>
             </div>
-            <Link
-              to="/documents/new"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              New Document
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/documents/new"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                New Document
+              </Link>
+              <button
+                onClick={logout}
+                className="text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200 px-3 py-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </header>
