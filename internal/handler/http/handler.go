@@ -1,35 +1,52 @@
 package http
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/version"
 )
+
+// HealthCheck is a function that checks a dependency's health.
+type HealthCheck func(ctx context.Context) error
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	docService service.DocumentService
-	log        *slog.Logger
+	docService   service.DocumentService
+	log          *slog.Logger
+	healthChecks map[string]HealthCheck
 }
 
 // New creates a new handler with dependencies
 func New(docService service.DocumentService, log *slog.Logger) *Handler {
 	return &Handler{
-		docService: docService,
-		log:        log,
+		docService:   docService,
+		log:          log,
+		healthChecks: make(map[string]HealthCheck),
 	}
+}
+
+// AddHealthCheck registers a named dependency health check.
+func (h *Handler) AddHealthCheck(name string, check HealthCheck) {
+	h.healthChecks[name] = check
 }
 
 // RegisterRoutes registers all HTTP routes
 func (h *Handler) RegisterRoutes(app *fiber.App) {
 	// Health check
 	app.Get("/health", h.healthCheck)
+
+	// API documentation
+	app.Get("/api/docs/openapi.json", h.serveOpenAPI)
 
 	// API v1 routes
 	api := app.Group("/api/v1")
@@ -49,27 +66,56 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 func ErrorHandler(log *slog.Logger) fiber.ErrorHandler {
 	return func(c *fiber.Ctx, err error) error {
 		code := fiber.StatusInternalServerError
+		var body any
 
-		if e, ok := err.(*fiber.Error); ok {
+		switch e := err.(type) {
+		case *fiber.Error:
 			code = e.Code
+			body = fiber.Map{"kind": "internal", "message": e.Message}
+		case *apperror.AppError:
+			code = e.Status
+			body = e
+		default:
+			body = fiber.Map{
+				"kind":    "internal",
+				"message": err.Error(),
+			}
 		}
 
 		log.Error("request error",
-			"error", err,
+			"error", err.Error(),
 			"status", code,
 			"path", c.Path(),
 		)
 
-		return c.Status(code).JSON(fiber.Map{
-			"error": err.Error(),
-		})
+		return c.Status(code).JSON(body)
 	}
 }
 
 // Health check handler
 func (h *Handler) healthCheck(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{
-		"status": "ok",
+	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Second)
+	defer cancel()
+
+	status := "ok"
+	code := fiber.StatusOK
+	checks := make(map[string]string)
+
+	for name, check := range h.healthChecks {
+		if err := check(ctx); err != nil {
+			checks[name] = err.Error()
+			status = "degraded"
+			code = fiber.StatusServiceUnavailable
+		} else {
+			checks[name] = "ok"
+		}
+	}
+
+	return c.Status(code).JSON(fiber.Map{
+		"status":  status,
+		"version": version.Version,
+		"commit":  version.Commit,
+		"checks":  checks,
 	})
 }
 
@@ -99,10 +145,8 @@ func (h *Handler) listDocuments(c *fiber.Ctx) error {
 
 	result, err := h.docService.List(ctx, page)
 	if err != nil {
-		h.log.Error("failed to list documents", "error", err.Error())
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to list documents: " + err.Error(),
-		})
+		h.log.Error("failed to list documents", "error", err)
+		return apperror.Internal("failed to list documents")
 	}
 
 	responses := make([]DocumentResponse, 0, len(result.Items))
@@ -153,17 +197,13 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 			// Read file content
 			f, err := file.Open()
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Failed to open uploaded file",
-				})
+				return apperror.BadRequest("failed to open uploaded file")
 			}
 			defer f.Close()
 
 			content, err = io.ReadAll(f)
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Failed to read uploaded file",
-				})
+				return apperror.BadRequest("failed to read uploaded file")
 			}
 
 			fileContentType = file.Header.Get("Content-Type")
@@ -184,9 +224,7 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 		}
 		if err := c.BodyParser(&req); err != nil {
 			h.log.Error("failed to parse request body", "error", err, "body", string(c.Body()))
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body: " + err.Error(),
-			})
+			return apperror.BadRequest("invalid request body")
 		}
 		title = req.Title
 		if title == "" {
@@ -204,9 +242,7 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		h.log.Error("failed to create document", "error", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to create document",
-		})
+		return apperror.Internal("failed to create document")
 	}
 
 	return c.Status(fiber.StatusCreated).JSON(DocumentResponse{
@@ -224,9 +260,7 @@ func (h *Handler) getDocument(c *fiber.Ctx) error {
 
 	doc, err := h.docService.GetByID(ctx, id)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Document not found",
-		})
+		return apperror.NotFound("document %s not found", id)
 	}
 
 	content, err := h.docService.GetContent(ctx, id)
@@ -250,17 +284,13 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 
 	doc, err := h.docService.GetByID(ctx, id)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Document not found",
-		})
+		return apperror.NotFound("document %s not found", id)
 	}
 
 	content, err := h.docService.GetContent(ctx, id)
 	if err != nil {
 		h.log.Error("failed to get document content", "error", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to get document content",
-		})
+		return apperror.Internal("failed to get document content")
 	}
 
 	// Set headers for file download
@@ -276,9 +306,7 @@ func (h *Handler) getDocumentThumbnail(c *fiber.Ctx) error {
 
 	thumbnail, err := h.docService.GetThumbnail(ctx, id)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-			"error": "Document not found",
-		})
+		return apperror.NotFound("document %s not found", id)
 	}
 
 	if thumbnail == nil {
@@ -316,17 +344,13 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 			// Read file content
 			f, err := file.Open()
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Failed to open uploaded file",
-				})
+				return apperror.BadRequest("failed to open uploaded file")
 			}
 			defer f.Close()
 
 			content, err = io.ReadAll(f)
 			if err != nil {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "Failed to read uploaded file",
-				})
+				return apperror.BadRequest("failed to read uploaded file")
 			}
 		}
 	} else {
@@ -336,9 +360,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 			Content string `json:"content"`
 		}
 		if err := c.BodyParser(&req); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "Invalid request body",
-			})
+			return apperror.BadRequest("invalid request body")
 		}
 		title = req.Title
 		content = []byte(req.Content)
@@ -351,9 +373,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		h.log.Error("failed to update document", "error", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to update document",
-		})
+		return apperror.Internal("failed to update document")
 	}
 
 	return c.JSON(DocumentResponse{
@@ -369,10 +389,16 @@ func (h *Handler) deleteDocument(c *fiber.Ctx) error {
 
 	if err := h.docService.Delete(c.Context(), id); err != nil {
 		h.log.Error("failed to delete document", "error", err)
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to delete document",
-		})
+		return apperror.Internal("failed to delete document")
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *Handler) serveOpenAPI(c *fiber.Ctx) error {
+	c.Set("Content-Type", "application/json")
+	if err := c.SendFile("api/gen/openapiv2/api.swagger.json"); err != nil {
+		return apperror.NotFound("openapi spec not found — run: make proto")
+	}
+	return nil
 }

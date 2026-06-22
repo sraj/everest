@@ -24,12 +24,17 @@ type Config struct {
 	UseSSL    bool
 }
 
-// NewContentRepository creates a new MinIO content repository
-func NewContentRepository(cfg Config) (repository.ContentRepository, error) {
-	client, err := minio.New(cfg.Endpoint, &minio.Options{
+// NewClient creates a raw MinIO client for health checks and direct access.
+func NewClient(cfg Config) (*minio.Client, error) {
+	return minio.New(cfg.Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
 		Secure: cfg.UseSSL,
 	})
+}
+
+// NewContentRepository creates a new MinIO content repository
+func NewContentRepository(cfg Config) (repository.ContentRepository, error) {
+	client, err := NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -11,16 +12,25 @@ import (
 	"github.com/sraj/everest/internal/infrastructure/minio"
 	"github.com/sraj/everest/internal/infrastructure/postgres"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
 	"github.com/sraj/everest/pkg/logger"
 	"github.com/sraj/everest/pkg/server"
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid configuration: %v\n", err)
+		os.Exit(1)
+	}
 	log := logger.New(cfg.LogLevel, cfg.AppName)
 
-	log.Info("Starting server...")
+	log.Info("Starting server",
+		"version", version.Version,
+		"commit", version.Commit,
+		"build_date", version.BuildDate,
+	)
 
 	db, err := dbx.New(dbx.DBConfig{
 		DSN:             cfg.DatabaseURL,
@@ -54,19 +64,41 @@ func main() {
 	}
 	log.Info("Connected to MinIO")
 
+	minioClient, err := minio.NewClient(minio.Config{
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		log.Error("Failed to create MinIO client for health checks", "error", err)
+		os.Exit(1)
+	}
+
 	docRepo := postgres.NewDocumentRepository(db)
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), log)
 	defer thumbnailSvc.Close()
 	docService := service.NewDocumentService(docRepo, contentRepo, thumbnailSvc, log)
 
 	httpHandler := handlerhttp.New(docService, log)
-	grpcHandler := handlergrpc.New(docService)
+	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
+		return db.Ping(ctx)
+	})
+	httpHandler.AddHealthCheck("storage", func(ctx context.Context) error {
+		_, err := minioClient.BucketExists(ctx, cfg.MinIOBucket)
+		return err
+	})
+
+	grpcHandler := handlergrpc.New(docService, log)
 
 	httpServer := server.NewHTTP(server.HTTPConfig{
-		AppName:      cfg.AppName,
-		Port:         cfg.Port,
-		CORSOrigins:  cfg.CORSOrigins,
-		ErrorHandler: handlerhttp.ErrorHandler(log),
+		AppName:        cfg.AppName,
+		Port:           cfg.Port,
+		CORSOrigins:    cfg.CORSOrigins,
+		RateLimitMax:   100,
+		RequestTimeout: 30 * time.Second,
+		ErrorHandler:   handlerhttp.ErrorHandler(log),
 	}, httpHandler, log)
 
 	grpcServer := server.NewGRPC(server.GRPCConfig{

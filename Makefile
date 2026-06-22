@@ -7,6 +7,12 @@ BUILD_DIR=./bin
 CMD_DIR=./cmd/server
 MIGRATE_DIR=./cmd/migrate
 
+# Version variables (embedded via ldflags)
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE ?= $(shell date -u +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || echo "unknown")
+LDFLAGS = -X github.com/sraj/everest/internal/version.Version=$(VERSION) -X github.com/sraj/everest/internal/version.Commit=$(COMMIT) -X github.com/sraj/everest/internal/version.BuildDate=$(BUILD_DATE)
+
 # Go variables
 GOBASE=$(shell pwd)
 GOBIN=$(GOBASE)/bin
@@ -14,12 +20,23 @@ GOBIN=$(GOBASE)/bin
 # Build the application
 build:
 	@echo "Building server..."
-	@go build -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
+	@go build -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_DIR)
 
 # Build the migrate CLI
 build-migrate:
 	@echo "Building migrate CLI..."
-	@go build -o $(BUILD_DIR)/$(MIGRATE_BINARY) $(MIGRATE_DIR)
+	@go build -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(MIGRATE_BINARY) $(MIGRATE_DIR)
+
+# Generate protobuf stubs and OpenAPI spec
+proto:
+	@echo "Generating protobuf stubs + OpenAPI spec..."
+	@cd api && buf dep update && buf generate
+	@echo "  Go stubs:  api/gen/go/"
+	@echo "  OpenAPI:   api/gen/openapiv2/api.swagger.json"
+
+proto-lint:
+	@echo "Linting protobuf files..."
+	@cd api && buf lint
 
 # Run the application
 run: build
@@ -84,6 +101,7 @@ install-tools:
 	@go install github.com/air-verse/air@latest
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+	@go install github.com/bufbuild/buf/cmd/buf@latest
 
 # Database migrations
 migrate-up: build-migrate
@@ -148,6 +166,7 @@ help:
 	@echo "  make lint            - Run linter"
 	@echo "  make fmt             - Format code"
 	@echo "  make tidy            - Tidy dependencies"
+	@echo "  make proto           - Generate protobuf stubs + OpenAPI spec"
 	@echo ""
 	@echo "Database:"
 	@echo "  make docker-up       - Start Docker services (PostgreSQL, MinIO)"

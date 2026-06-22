@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package documents.v1;
+
+option go_package = "github.com/sraj/everest/api/gen/go/documents/v1;documentsv1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service DocumentService {
+  rpc List(ListRequest) returns (ListResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/documents"
+    };
+  }
+  rpc Create(CreateRequest) returns (Document) {
+    option (google.api.http) = {
+      post: "/api/v1/documents"
+      body: "*"
+    };
+  }
+  rpc Get(GetRequest) returns (Document) {
+    option (google.api.http) = {
+      get: "/api/v1/documents/{id}"
+    };
+  }
+  rpc GetContent(GetRequest) returns (GetContentResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/documents/{id}/download"
+    };
+  }
+  rpc GetThumbnail(GetRequest) returns (GetThumbnailResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/documents/{id}/thumbnail"
+    };
+  }
+  rpc Update(UpdateRequest) returns (Document) {
+    option (google.api.http) = {
+      put: "/api/v1/documents/{id}"
+      body: "*"
+    };
+  }
+  rpc Delete(DeleteRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/api/v1/documents/{id}"
+    };
+  }
+}
+
+message Document {
+  string id = 1;
+  string title = 2;
+  string owner_id = 3;
+  string content_id = 4;
+  optional string thumbnail_id = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+message CreateRequest {
+  string title = 1;
+  string owner_id = 2;
+  bytes content = 3;
+  string content_type = 4;
+}
+
+message GetRequest {
+  string id = 1;
+}
+
+message GetContentResponse {
+  bytes content = 1;
+}
+
+message ListRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListResponse {
+  repeated Document items = 1;
+  int32 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+  int32 total_pages = 5;
+}
+
+message UpdateRequest {
+  string id = 1;
+  string title = 2;
+  bytes content = 3;
+}
+
+message DeleteRequest {
+  string id = 1;
+}
+
+message GetThumbnailResponse {
+  bytes thumbnail = 1;
+}
