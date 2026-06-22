@@ -79,6 +79,30 @@ Set `ZITADEL_CLIENT_ID=""` in `.env` — the middleware won't activate, all requ
 4. Sets `c.Locals("user", IntrospectUser{Sub, Email, Name})`
 5. Handler extracts `owner_id` from user Sub for document ownership
 
+## Production Changes
+
+| Item | Dev | Production |
+|---|---|---|
+| Redirect URI | `http://localhost:5173/auth/callback` | `https://yourdomain.com/auth/callback` |
+| Post Logout URI | `http://localhost:5173` | `https://yourdomain.com` |
+| `ZITADEL_ISSUER` | `http://localhost:8082` | `https://auth.yourdomain.com` or Zitadel Cloud URL |
+| `CORS_ORIGINS` | `*` | `https://yourdomain.com` |
+| App Type | Web | Can stay Web or switch to User Agent (HTTPS available) |
+| Token | `id_token` as Bearer | Use `access_token` with introspection or `id_token` |
+| Zitadel Deploy | docker-compose profile | Dedicated instance or Zitadel Cloud |
+| Secrets | `.env` file | Kubernetes secrets / Vault / env vars |
+| `ZITADEL_MASTERKEY` | hardcoded | Generated via `openssl rand -base64 32` |
+| Frontend env | `VITE_*` build-time | Inject at deploy time (CI/CD or server-side) |
+
+### Production Checklist
+
+1. **Zitadel**: Create a separate production project/application in Zitadel
+2. **HTTPS**: All redirect URIs must use `https://` — Zitadel enforces this for User Agent apps
+3. **Client ID**: Update `ZITADEL_CLIENT_ID` and `VITE_ZITADEL_CLIENT_ID` to production app
+4. **CORS**: Restrict to your production domain
+5. **Secrets**: Never commit `.env` to source control; use your CI/CD secret manager
+6. **Deployment**: Use Kubernetes/Helm instead of docker-compose; our Docker images work as-is
+
 ## Database Columns
 
 - `documents.owner_id` → `VARCHAR(255)` (Zitadel user IDs are not UUIDs)
