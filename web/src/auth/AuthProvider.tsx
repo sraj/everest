@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const getAccessToken = useCallback(() => {
-    return user?.id_token
+    return user?.access_token
   }, [user])
 
   useEffect(() => {
