@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppDispatch, useAppSelector } from '../store/hooks'
 import { fetchDocuments, deleteDocument } from '../store/documentSlice'
+import { useAuth } from '../auth/AuthProvider'
 
 export function Home() {
   const dispatch = useAppDispatch()
   const { documents, loading, error } = useAppSelector((state) => state.documents)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { isAuthenticated, getAccessToken } = useAuth()
 
   useEffect(() => {
-    dispatch(fetchDocuments())
-  }, [dispatch])
+    if (isAuthenticated) {
+      dispatch(fetchDocuments(getAccessToken()))
+    }
+  }, [dispatch, isAuthenticated, getAccessToken])
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -19,7 +23,7 @@ export function Home() {
     if (confirm('Are you sure you want to delete this document?')) {
       setDeletingId(id)
       try {
-        await dispatch(deleteDocument(id)).unwrap()
+        await dispatch(deleteDocument({ id, accessToken: getAccessToken() })).unwrap()
       } finally {
         setDeletingId(null)
       }
