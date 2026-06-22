@@ -16,6 +16,8 @@ type ThumbnailConfig struct {
 	Width   int
 	Height  int
 	Quality int
+	Workers int
+	Buffer  int
 }
 
 // DefaultThumbnailConfig returns sensible defaults for document thumbnails
@@ -24,6 +26,8 @@ func DefaultThumbnailConfig() ThumbnailConfig {
 		Width:   600,
 		Height:  800,
 		Quality: 80,
+		Workers: 5,
+		Buffer:  20,
 	}
 }
 
@@ -33,18 +37,28 @@ type ThumbnailService interface {
 	Close()
 }
 
-// thumbnailService handles document thumbnail generation using a persistent browser.
+type thumbnailJob struct {
+	html   []byte
+	result chan thumbnailResult
+}
+
+type thumbnailResult struct {
+	data []byte
+	err  error
+}
+
+// thumbnailService handles document thumbnail generation using worker pools.
 type thumbnailService struct {
 	config      ThumbnailConfig
 	log         *slog.Logger
 	allocCtx    context.Context
 	allocCancel context.CancelFunc
-	sem         chan struct{}
-	mu          sync.Mutex
-	closed      bool
+	jobs        chan thumbnailJob
+	workers     int
+	wg          sync.WaitGroup
 }
 
-// NewThumbnailService creates a new thumbnail service with a long-lived headless browser.
+// NewThumbnailService creates a new thumbnail service with worker pool.
 func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) ThumbnailService {
 	allocCtx, allocCancel := chromedp.NewExecAllocator(context.Background(),
 		append(chromedp.DefaultExecAllocatorOptions[:],
@@ -55,40 +69,41 @@ func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) ThumbnailServ
 		)...,
 	)
 
-	log.Info("thumbnail browser started")
-	return &thumbnailService{
+	s := &thumbnailService{
 		config:      config,
 		log:         log,
 		allocCtx:    allocCtx,
 		allocCancel: allocCancel,
-		sem:         make(chan struct{}, 2),
+		jobs:        make(chan thumbnailJob, config.Buffer),
+		workers:     config.Workers,
+	}
+
+	s.wg.Add(config.Workers)
+	for i := 0; i < config.Workers; i++ {
+		go s.worker()
+	}
+
+	log.Info("thumbnail service started", "workers", config.Workers, "buffer", config.Buffer)
+	return s
+}
+
+func (s *thumbnailService) worker() {
+	defer s.wg.Done()
+
+	for job := range s.jobs {
+		taskCtx, cancel := context.WithTimeout(s.allocCtx, 30*time.Second)
+		data, err := s.render(taskCtx, job.html)
+		cancel()
+		job.result <- thumbnailResult{data: data, err: err}
 	}
 }
 
-// GenerateFromHTML renders HTML content and captures a screenshot.
-func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error) {
-	s.mu.Lock()
-	if s.closed {
-		s.mu.Unlock()
-		return nil, fmt.Errorf("thumbnail service is closed")
-	}
-	s.mu.Unlock()
-
-	select {
-	case s.sem <- struct{}{}:
-		defer func() { <-s.sem }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-
+func (s *thumbnailService) render(ctx context.Context, htmlContent []byte) ([]byte, error) {
 	fullHTML := wrapHTML(htmlContent, s.config.Width, s.config.Height)
 	dataURL := "data:text/html;charset=utf-8," + url.PathEscape(fullHTML)
 
-	browserCtx, browserCancel := chromedp.NewContext(s.allocCtx)
+	browserCtx, browserCancel := chromedp.NewContext(ctx)
 	defer browserCancel()
-
-	browserCtx, cancel := context.WithTimeout(browserCtx, 30*time.Second)
-	defer cancel()
 
 	var screenshot []byte
 	err := chromedp.Run(browserCtx,
@@ -98,23 +113,43 @@ func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []b
 		chromedp.FullScreenshot(&screenshot, s.config.Quality),
 	)
 	if err != nil {
-		s.log.Error("thumbnail generation failed", "error", err)
-		return nil, fmt.Errorf("thumbnail generation failed: %w", err)
+		return nil, fmt.Errorf("render failed: %w", err)
 	}
 
-	s.log.Debug("thumbnail generated", "size", len(screenshot))
 	return screenshot, nil
 }
 
-func (s *thumbnailService) Close() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return
+// GenerateFromHTML renders HTML content and captures a screenshot.
+func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error) {
+	job := thumbnailJob{
+		html:   htmlContent,
+		result: make(chan thumbnailResult, 1),
 	}
-	s.closed = true
+
+	select {
+	case s.jobs <- job:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case r := <-job.result:
+		if r.err != nil {
+			s.log.Error("thumbnail generation failed", "error", r.err)
+			return nil, r.err
+		}
+		s.log.Debug("thumbnail generated", "size", len(r.data))
+		return r.data, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (s *thumbnailService) Close() {
+	close(s.jobs)
+	s.wg.Wait()
 	s.allocCancel()
-	s.log.Info("thumbnail browser stopped")
+	s.log.Info("thumbnail service stopped")
 }
 
 // wrapHTML wraps content in a styled document matching Google Docs appearance.
