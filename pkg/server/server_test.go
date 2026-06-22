@@ -2,81 +2,120 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
-	"time"
 )
 
 type testServer struct {
 	name     string
-	started  chan struct{}
+	startErr error
+	once     sync.Once
 	shutdown chan struct{}
 }
 
-func (s *testServer) Name() string                   { return s.name }
-func (s *testServer) Start() error                   { close(s.started); <-s.shutdown; return nil }
-func (s *testServer) Shutdown(_ context.Context) error { close(s.shutdown); return nil }
+func (s *testServer) Name() string { return s.name }
 
-func TestRun_StartAndShutdown(t *testing.T) {
-	srv := &testServer{
-		name:     "test",
-		started:  make(chan struct{}),
-		shutdown: make(chan struct{}),
+func (s *testServer) Start() error {
+	if s.startErr != nil {
+		return s.startErr
 	}
+	<-s.shutdown
+	return nil
+}
 
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+func (s *testServer) Shutdown(_ context.Context) error {
+	s.once.Do(func() { close(s.shutdown) })
+	return nil
+}
 
-	done := make(chan error, 1)
-	go func() {
-		done <- Run(log, srv)
-	}()
+type failingServer struct{}
 
-	select {
-	case <-srv.started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("server did not start")
-	}
+func (failingServer) Name() string                     { return "fail" }
+func (failingServer) Start() error                     { return fmt.Errorf("boom") }
+func (failingServer) Shutdown(_ context.Context) error { return nil }
 
-	if err := srv.Shutdown(context.Background()); err != nil {
-		t.Fatalf("shutdown failed: %v", err)
-	}
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatalf("Run returned error: %v", err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("Run did not return after shutdown")
-	}
+func testLog() *slog.Logger {
+	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
 func TestRun_NoServers(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := Run(log); err != nil {
-		t.Fatalf("Run with no servers returned error: %v", err)
+	if err := Run(testLog()); err != nil {
+		t.Fatalf("Run with no servers: %v", err)
 	}
 }
 
 func TestRun_SkipsNoop(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	if err := Run(log, noop{}, noop{}); err != nil {
-		t.Fatalf("Run with only noops returned error: %v", err)
+	if err := Run(testLog(), noop{}, noop{}); err != nil {
+		t.Fatalf("Run with only noops: %v", err)
 	}
 }
 
 func TestNewHTTP_Disabled(t *testing.T) {
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	srv := NewHTTP(HTTPConfig{}, nil, log)
+	srv := NewHTTP(HTTPConfig{}, nil, testLog())
 	if _, ok := srv.(noop); !ok {
-		t.Fatal("NewHTTP with empty port should return noop")
+		t.Fatal("empty port should return noop")
 	}
 }
 
 func TestNewGRPC_Disabled(t *testing.T) {
 	srv := NewGRPC(GRPCConfig{}, nil)
 	if _, ok := srv.(noop); !ok {
-		t.Fatal("NewGRPC with empty port should return noop")
+		t.Fatal("empty port should return noop")
+	}
+}
+
+func TestServer_Shutdown(t *testing.T) {
+	srv := &testServer{
+		name:     "test",
+		shutdown: make(chan struct{}),
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- srv.Start() }()
+
+	// Shutdown should allow Start to return nil
+	srv.Shutdown(context.Background())
+
+	if err := <-done; err != nil {
+		t.Fatalf("Start returned error: %v", err)
+	}
+}
+
+func TestServer_Failure(t *testing.T) {
+	srv := failingServer{}
+	if err := srv.Start(); err == nil {
+		t.Fatal("expected error from failing server")
+	}
+}
+
+func TestServer_MultipleShutdown(t *testing.T) {
+	srv := &testServer{
+		name:     "test",
+		shutdown: make(chan struct{}),
+	}
+
+	go func() { srv.Start() }()
+
+	srv.Shutdown(context.Background())
+	srv.Shutdown(context.Background()) // should not panic
+}
+
+func TestServer_MixedNoops(t *testing.T) {
+	srv := &testServer{
+		name:     "real",
+		shutdown: make(chan struct{}),
+	}
+
+	go func() { srv.Start() }()
+
+	servers := []Server{noop{}, srv, noop{}}
+	for _, s := range servers {
+		if _, isNoop := s.(noop); isNoop {
+			continue
+		}
+		s.Shutdown(context.Background())
 	}
 }

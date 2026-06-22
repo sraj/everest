@@ -3,13 +3,12 @@ package dbx
 import (
 	"strings"
 	"testing"
-
-	sq "github.com/Masterminds/squirrel"
 )
 
 func TestCond_Eq(t *testing.T) {
 	pred := Cond.Eq("id", 123)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -25,6 +24,7 @@ func TestCond_Eq(t *testing.T) {
 func TestCond_NotEq(t *testing.T) {
 	pred := Cond.NotEq("status", "inactive")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -40,6 +40,7 @@ func TestCond_NotEq(t *testing.T) {
 func TestCond_Gt(t *testing.T) {
 	pred := Cond.Gt("age", 18)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -55,6 +56,7 @@ func TestCond_Gt(t *testing.T) {
 func TestCond_Lt(t *testing.T) {
 	pred := Cond.Lt("price", 100)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -70,6 +72,7 @@ func TestCond_Lt(t *testing.T) {
 func TestCond_GtOrEq(t *testing.T) {
 	pred := Cond.GtOrEq("score", 50)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -85,6 +88,7 @@ func TestCond_GtOrEq(t *testing.T) {
 func TestCond_LtOrEq(t *testing.T) {
 	pred := Cond.LtOrEq("value", 75)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -100,6 +104,7 @@ func TestCond_LtOrEq(t *testing.T) {
 func TestCond_Like(t *testing.T) {
 	pred := Cond.Like("name", "%John%")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -115,6 +120,7 @@ func TestCond_Like(t *testing.T) {
 func TestCond_ILike(t *testing.T) {
 	pred := Cond.ILike("email", "%gmail%")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -130,6 +136,7 @@ func TestCond_ILike(t *testing.T) {
 func TestCond_IsNull(t *testing.T) {
 	pred := Cond.IsNull("deleted_at")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -145,6 +152,7 @@ func TestCond_IsNull(t *testing.T) {
 func TestCond_IsNotNull(t *testing.T) {
 	pred := Cond.IsNotNull("updated_at")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -160,6 +168,7 @@ func TestCond_IsNotNull(t *testing.T) {
 func TestCond_In_Single(t *testing.T) {
 	pred := Cond.In("status", "active", "pending", "completed")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -174,7 +183,7 @@ func TestCond_In_Single(t *testing.T) {
 
 func TestCond_In_Empty(t *testing.T) {
 	pred := Cond.In("id")
-	sql, args, err := pred.ToSql()
+	_, args, err := pred.ToSql()
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -187,6 +196,7 @@ func TestCond_In_Empty(t *testing.T) {
 func TestCond_Between(t *testing.T) {
 	pred := Cond.Between("age", 18, 65)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -205,6 +215,7 @@ func TestCond_And(t *testing.T) {
 		Cond.Gt("age", 18),
 	)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -220,6 +231,7 @@ func TestCond_And(t *testing.T) {
 func TestCond_And_Empty(t *testing.T) {
 	pred := Cond.And()
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -235,6 +247,7 @@ func TestCond_Or(t *testing.T) {
 		Cond.Eq("role", "moderator"),
 	)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -250,6 +263,7 @@ func TestCond_Or(t *testing.T) {
 func TestCond_Or_Empty(t *testing.T) {
 	pred := Cond.Or()
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -262,6 +276,7 @@ func TestCond_Or_Empty(t *testing.T) {
 func TestCond_Search_Single(t *testing.T) {
 	pred := Cond.Search("john", "name", "email")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -281,6 +296,7 @@ func TestCond_Search_Single(t *testing.T) {
 func TestCond_Search_NoColumns(t *testing.T) {
 	pred := Cond.Search("term")
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -293,6 +309,7 @@ func TestCond_Search_NoColumns(t *testing.T) {
 func TestCond_Raw(t *testing.T) {
 	pred := Cond.Raw("col @> ?", `{"tag"}`)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -314,6 +331,7 @@ func TestCond_Nested_And_Or(t *testing.T) {
 		),
 	)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
@@ -334,6 +352,7 @@ func TestCond_Complex_Condition(t *testing.T) {
 		Cond.IsNotNull("email"),
 	)
 	sql, args, err := pred.ToSql()
+	_ = sql
 	if err != nil {
 		t.Fatalf("ToSql failed: %v", err)
 	}
