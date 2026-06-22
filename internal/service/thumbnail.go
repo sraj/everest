@@ -56,6 +56,8 @@ type thumbnailService struct {
 	jobs        chan thumbnailJob
 	workers     int
 	wg          sync.WaitGroup
+	mu          sync.Mutex
+	closed      bool
 }
 
 // NewThumbnailService creates a new thumbnail service with worker pool.
@@ -121,6 +123,13 @@ func (s *thumbnailService) render(ctx context.Context, htmlContent []byte) ([]by
 
 // GenerateFromHTML renders HTML content and captures a screenshot.
 func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []byte) ([]byte, error) {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("thumbnail service is closed")
+	}
+	s.mu.Unlock()
+
 	job := thumbnailJob{
 		html:   htmlContent,
 		result: make(chan thumbnailResult, 1),
@@ -146,6 +155,14 @@ func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []b
 }
 
 func (s *thumbnailService) Close() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+	s.closed = true
+	s.mu.Unlock()
+
 	close(s.jobs)
 	s.wg.Wait()
 	s.allocCancel()
