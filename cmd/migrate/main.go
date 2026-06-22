@@ -30,8 +30,8 @@ func main() {
 		steps          int
 	)
 
-	flag.StringVar(&migrationsPath, "migrations", "migrations", "Path to migrations directory")
-	flag.StringVar(&seedsPath, "seeds", "seeds", "Path to seeds directory")
+	flag.StringVar(&migrationsPath, "migrations", "db/migrations", "Path to migrations directory")
+	flag.StringVar(&seedsPath, "seeds", "db/seeds", "Path to seeds directory")
 	flag.StringVar(&databaseURL, "database", os.Getenv("DATABASE_URL"), "Database URL")
 	flag.IntVar(&steps, "steps", 0, "Number of steps for up/down (0 = all)")
 	flag.Parse()

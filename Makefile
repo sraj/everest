@@ -117,7 +117,7 @@ migrate-version: build-migrate
 
 migrate-create:
 	@read -p "Enter migration name: " name; \
-	migrate create -ext sql -dir migrations -seq $$name
+	migrate create -ext sql -dir db/migrations -seq $$name
 
 # Database seeding
 seed: build-migrate
