@@ -132,9 +132,9 @@ func (v *Verifier) Middleware() fiber.Handler {
 			jwt.WithLeeway(30*time.Second),
 		)
 		if err != nil {
-			v.log.Error("token validation failed", "error", err)
+			v.log.Error("token validation failed", "error", err.Error())
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid token",
+				"error": "invalid token: " + err.Error(),
 			})
 		}
 		if !parsed.Valid {
