@@ -10,11 +10,21 @@ import (
 	"github.com/sraj/everest/internal/domain/repository"
 )
 
-// DocumentService handles document business logic
-type DocumentService struct {
+// DocumentService defines the interface for document business logic
+type DocumentService interface {
+	Create(ctx context.Context, input CreateDocumentInput) (*model.Document, error)
+	GetByID(ctx context.Context, id string) (*model.Document, error)
+	GetContent(ctx context.Context, id string) ([]byte, error)
+	Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, page model.Page) (*model.PageResult, error)
+	GetThumbnail(ctx context.Context, id string) ([]byte, error)
+}
+
+type documentService struct {
 	docRepo      repository.DocumentRepository
 	contentRepo  repository.ContentRepository
-	thumbnailSvc *ThumbnailService
+	thumbnailSvc ThumbnailService
 	log          *slog.Logger
 }
 
@@ -22,10 +32,10 @@ type DocumentService struct {
 func NewDocumentService(
 	docRepo repository.DocumentRepository,
 	contentRepo repository.ContentRepository,
-	thumbnailSvc *ThumbnailService,
+	thumbnailSvc ThumbnailService,
 	log *slog.Logger,
-) *DocumentService {
-	return &DocumentService{
+) DocumentService {
+	return &documentService{
 		docRepo:      docRepo,
 		contentRepo:  contentRepo,
 		thumbnailSvc: thumbnailSvc,
@@ -41,8 +51,8 @@ type CreateDocumentInput struct {
 	ContentType string
 }
 
-// CreateDocument creates a new document
-func (s *DocumentService) CreateDocument(ctx context.Context, input CreateDocumentInput) (*model.Document, error) {
+// Create creates a new document
+func (s *documentService) Create(ctx context.Context, input CreateDocumentInput) (*model.Document, error) {
 	id := uuid.New().String()
 	contentID := uuid.New().String()
 	now := time.Now()
@@ -82,13 +92,13 @@ func (s *DocumentService) CreateDocument(ctx context.Context, input CreateDocume
 	return doc, nil
 }
 
-// GetDocument retrieves a document by ID
-func (s *DocumentService) GetDocument(ctx context.Context, id string) (*model.Document, error) {
+// GetByID retrieves a document by ID
+func (s *documentService) GetByID(ctx context.Context, id string) (*model.Document, error) {
 	return s.docRepo.GetByID(ctx, id)
 }
 
-// GetDocumentContent retrieves document content
-func (s *DocumentService) GetDocumentContent(ctx context.Context, id string) ([]byte, error) {
+// GetContent retrieves document content
+func (s *documentService) GetContent(ctx context.Context, id string) ([]byte, error) {
 	doc, err := s.docRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -104,8 +114,8 @@ type UpdateDocumentInput struct {
 	Content []byte
 }
 
-// UpdateDocument updates an existing document
-func (s *DocumentService) UpdateDocument(ctx context.Context, input UpdateDocumentInput) (*model.Document, error) {
+// Update updates an existing document
+func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error) {
 	doc, err := s.docRepo.GetByID(ctx, input.ID)
 	if err != nil {
 		return nil, err
@@ -137,8 +147,8 @@ func (s *DocumentService) UpdateDocument(ctx context.Context, input UpdateDocume
 	return doc, nil
 }
 
-// DeleteDocument deletes a document
-func (s *DocumentService) DeleteDocument(ctx context.Context, id string) error {
+// Delete deletes a document
+func (s *documentService) Delete(ctx context.Context, id string) error {
 	doc, err := s.docRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -161,17 +171,13 @@ func (s *DocumentService) DeleteDocument(ctx context.Context, id string) error {
 	return s.docRepo.Delete(ctx, id)
 }
 
-// ListDocuments lists documents with pagination.
-// If ownerID is non-empty, only documents owned by that user are returned.
-func (s *DocumentService) ListDocuments(ctx context.Context, ownerID string, limit, offset int) ([]*model.Document, error) {
-	if ownerID != "" {
-		return s.docRepo.GetByOwnerID(ctx, ownerID)
-	}
-	return s.docRepo.List(ctx, limit, offset)
+// List lists documents with pagination
+func (s *documentService) List(ctx context.Context, page model.Page) (*model.PageResult, error) {
+	return s.docRepo.List(ctx, page)
 }
 
-// GetDocumentThumbnail retrieves document thumbnail
-func (s *DocumentService) GetDocumentThumbnail(ctx context.Context, id string) ([]byte, error) {
+// GetThumbnail retrieves document thumbnail
+func (s *documentService) GetThumbnail(ctx context.Context, id string) ([]byte, error) {
 	doc, err := s.docRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -185,7 +191,7 @@ func (s *DocumentService) GetDocumentThumbnail(ctx context.Context, id string) (
 }
 
 // generateAndSaveThumbnail generates a thumbnail and saves it to storage
-func (s *DocumentService) generateAndSaveThumbnail(ctx context.Context, docID string, content []byte) {
+func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID string, content []byte) {
 	if s.thumbnailSvc == nil {
 		return
 	}
@@ -205,22 +211,20 @@ func (s *DocumentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	// Generate thumbnail ID or reuse existing one
-	thumbnailID := ""
-	if doc.ThumbnailID != nil {
-		thumbnailID = *doc.ThumbnailID
-	}
-	if thumbnailID == "" {
-		thumbnailID = uuid.New().String()
+	thumbnailID := doc.ThumbnailID
+	if thumbnailID == nil {
+		id := uuid.New().String()
+		thumbnailID = &id
 	}
 
 	// Save thumbnail to MinIO
-	if err := s.contentRepo.Save(ctx, thumbnailID, thumbnail, "image/png"); err != nil {
+	if err := s.contentRepo.Save(ctx, *thumbnailID, thumbnail, "image/png"); err != nil {
 		s.log.Error("failed to save thumbnail", "error", err, "doc_id", docID)
 		return
 	}
 
 	// Update document with thumbnail ID
-	doc.ThumbnailID = &thumbnailID
+	doc.ThumbnailID = thumbnailID
 	doc.UpdatedAt = time.Now()
 	if err := s.docRepo.Update(ctx, doc); err != nil {
 		s.log.Error("failed to update document with thumbnail", "error", err, "doc_id", docID)

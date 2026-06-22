@@ -48,10 +48,15 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f coverage.out coverage.html
 
-# Start docker services
+# Start all services in Docker (full stack)
 docker-up:
-	@echo "Starting Docker services..."
-	@docker-compose up -d
+	@echo "Starting all Docker services..."
+	@docker compose up -d --build
+
+# Start infrastructure services only (for local backend/frontend dev)
+docker-infra:
+	@echo "Starting infrastructure services (PostgreSQL, MinIO)..."
+	@docker compose up -d --build postgres minio
 
 # Stop docker services
 docker-down:

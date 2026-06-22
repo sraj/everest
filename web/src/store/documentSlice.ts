@@ -36,7 +36,7 @@ export const fetchDocuments = createAsyncThunk(
       throw new Error('Failed to fetch documents')
     }
     const data = await response.json()
-    return (data.documents ?? []) as Document[]
+    return data.documents as Document[]
   }
 )
 

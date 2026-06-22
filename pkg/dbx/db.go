@@ -80,6 +80,22 @@ func (d *DB) Select(cols ...string) SelectBuilder {
 	return SelectBuilder{db: d, sq: d.psql.Select(cols...)}
 }
 
+// WithCTE starts a CTE builder to define Common Table Expressions.
+// Chain multiple WithCTE calls to add CTEs, then call Select to begin the query.
+//
+// Example:
+//
+//	results := []Result{}
+//	err := db.WithCTE().
+//	    WithCTE("cte1", "SELECT * FROM orders WHERE amount > 100").
+//	    WithCTE("cte2", "SELECT * FROM cte1 WHERE status = 'active'").
+//	    Select("id", "amount").
+//	    From("cte2").
+//	    All(ctx, &results)
+func (d *DB) WithCTE() CTEBuilder {
+	return CTEBuilder{}
+}
+
 // Insert starts an INSERT builder for the given table.
 func (d *DB) Insert(table string) InsertBuilder {
 	return InsertBuilder{db: d, sq: d.psql.Insert(table)}

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/domain/repository"
@@ -67,24 +68,49 @@ func (r *documentRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *documentRepository) List(ctx context.Context, limit, offset int) ([]*model.Document, error) {
+func (r *documentRepository) List(ctx context.Context, page model.Page) (*model.PageResult, error) {
+	dbPage := dbx.Page{Number: page.Number, Size: page.Size}
+
+	total, err := r.db.Select("id").From("documents").Count(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list documents count: %w", err)
+	}
+
 	var docs []*model.Document
-	err := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
+	q := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
 		From("documents").
 		OrderBy("updated_at", dbx.DESC).
-		Paginate(dbx.Page{Number: offset/limit + 1, Size: limit}).
-		All(ctx, &docs)
-	if err != nil {
-		return nil, err
+		Paginate(dbPage)
+	if err := q.All(ctx, &docs); err != nil {
+		return nil, fmt.Errorf("list documents: %w", err)
 	}
-	return docs, nil
+
+	totalPages := 0
+	if dbPage.Size > 0 {
+		totalPages = (total + dbPage.Size - 1) / dbPage.Size
+	}
+	if dbPage.Number < 1 {
+		dbPage.Number = 1
+	}
+
+	return &model.PageResult{
+		Items:      docs,
+		Total:      total,
+		Page:       dbPage.Number,
+		PageSize:   dbPage.Size,
+		TotalPages: totalPages,
+	}, nil
 }
 
-func nullString(s string) interface{} {
-	if s == "" {
+func (r *documentRepository) Count(ctx context.Context) (int, error) {
+	return r.db.Select("id").From("documents").Count(ctx)
+}
+
+func nullString(s *string) interface{} {
+	if s == nil {
 		return nil
 	}
-	return s
+	return *s
 }
 
 func thumbnailVal(s *string) string {

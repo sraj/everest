@@ -14,6 +14,7 @@ type SelectBuilder struct {
 	db        *DB
 	sq        sq.SelectBuilder
 	allowSort map[string]bool // optional whitelist for safe ORDER BY
+	ctes      []CTE           // accumulated CTEs for WITH clauses
 }
 
 // ── Chain methods ────────────────────────────────────────────
@@ -100,10 +101,39 @@ func (b SelectBuilder) Suffix(sql string, args ...any) SelectBuilder {
 	return b
 }
 
+// WithCTE adds a CTE to this SelectBuilder with raw SQL.
+// Example: .WithCTE("temp_data", "SELECT * FROM orders WHERE amount > 100")
+func (b SelectBuilder) WithCTE(name, sql string, args ...any) SelectBuilder {
+	b.ctes = append(b.ctes, CTE{name: name, sql: sql, args: args})
+	return b
+}
+
+// WithSelectCTE adds a CTE built from another SelectBuilder.
+// Example: .WithSelectCTE("active_users", db.Select("*").From("users").Where(...))
+func (b SelectBuilder) WithSelectCTE(name string, sb SelectBuilder) SelectBuilder {
+	sql, args, err := sb.ToSQL()
+	if err != nil {
+		// Error will be caught at execution time
+		return b
+	}
+	return b.WithCTE(name, sql, args...)
+}
+
 // ToSQL returns the generated SQL string and bound arguments.
 // Useful for logging or testing without executing.
 func (b SelectBuilder) ToSQL() (string, []any, error) {
-	return b.sq.ToSql()
+	mainSQL, mainArgs, err := b.sq.ToSql()
+	if err != nil {
+		return "", nil, err
+	}
+
+	if len(b.ctes) == 0 {
+		return mainSQL, mainArgs, nil
+	}
+
+	withClause, withArgs := buildWithClause(b.ctes)
+	finalSQL, finalArgs := prependWithClause(withClause, withArgs, mainSQL, mainArgs)
+	return finalSQL, finalArgs, nil
 }
 
 // ── Execution methods ────────────────────────────────────────
@@ -111,7 +141,7 @@ func (b SelectBuilder) ToSQL() (string, []any, error) {
 // One executes the query and scans a single row into dest.
 // Returns ErrNotFound when no row matches.
 func (b SelectBuilder) One(ctx context.Context, dest any) error {
-	sql, args, err := b.sq.ToSql()
+	sql, args, err := b.ToSQL()
 	if err != nil {
 		return fmt.Errorf("select.One build: %w", err)
 	}
@@ -127,7 +157,7 @@ func (b SelectBuilder) One(ctx context.Context, dest any) error {
 // All executes the query and scans all rows into dest.
 // dest must be a pointer to a slice of structs.
 func (b SelectBuilder) All(ctx context.Context, dest any) error {
-	sql, args, err := b.sq.ToSql()
+	sql, args, err := b.ToSQL()
 	if err != nil {
 		return fmt.Errorf("select.All build: %w", err)
 	}
@@ -137,21 +167,16 @@ func (b SelectBuilder) All(ctx context.Context, dest any) error {
 	return nil
 }
 
-// Count clones the builder, replaces SELECT columns with COUNT(*),
-// removes ORDER BY, LIMIT, and OFFSET, then returns the total count.
+// Count wraps the query in SELECT COUNT(*) FROM (…) AS t
+// and returns the total count.
 func (b SelectBuilder) Count(ctx context.Context) (int, error) {
-	countSQ := b.sq.
-		Columns().
-		Column("COUNT(*)").
-		RemoveLimit().
-		RemoveOffset()
-
-	sql, args, err := countSQ.ToSql()
+	selectSQL, args, err := b.ToSQL()
 	if err != nil {
 		return 0, fmt.Errorf("select.Count build: %w", err)
 	}
+	countSQL := "SELECT COUNT(*) FROM (" + selectSQL + ") AS t"
 	var n int
-	if err := b.db.db.GetContext(ctx, &n, sql, args...); err != nil {
+	if err := b.db.db.GetContext(ctx, &n, countSQL, args...); err != nil {
 		return 0, fmt.Errorf("select.Count exec: %w", err)
 	}
 	return n, nil
@@ -159,7 +184,7 @@ func (b SelectBuilder) Count(ctx context.Context) (int, error) {
 
 // Exists wraps the query in SELECT EXISTS (…) and returns the boolean result.
 func (b SelectBuilder) Exists(ctx context.Context) (bool, error) {
-	inner, args, err := b.sq.ToSql()
+	inner, args, err := b.ToSQL()
 	if err != nil {
 		return false, fmt.Errorf("select.Exists build: %w", err)
 	}
@@ -175,7 +200,7 @@ func (b SelectBuilder) Exists(ctx context.Context) (bool, error) {
 // Avoids loading the entire result set into memory — suitable for
 // large tables or streaming exports.
 func (b SelectBuilder) Each(ctx context.Context, fn func(*sqlx.Rows) error) error {
-	sql, args, err := b.sq.ToSql()
+	sql, args, err := b.ToSQL()
 	if err != nil {
 		return fmt.Errorf("select.Each build: %w", err)
 	}

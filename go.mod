@@ -14,6 +14,7 @@ require (
 	github.com/minio/minio-go/v7 v7.1.0
 	github.com/rs/zerolog v1.35.1
 	github.com/zitadel/oidc/v3 v3.47.5
+	google.golang.org/grpc v1.77.0
 )
 
 require (
@@ -67,4 +68,6 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251022142026-3a174f9686a8 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
 )
