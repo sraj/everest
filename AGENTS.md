@@ -26,19 +26,35 @@ Browser → Zitadel Login (8082) → OIDC callback → SPA (5173) → API (8080)
 | `cmd/server/main.go` | Initializes verifier, enables middleware when client ID is set |
 | `docker-compose.yml` | Zitadel services under `profiles: [zitadel]` |
 
-## Starting Zitadel
+## Zitadel Console Configuration
 
-```bash
-# Add master key to .env
-echo 'ZITADEL_MASTERKEY=MasterkeyNeedsToHave32Characters' >> .env
+After first login to `http://localhost:8082/ui/console` as `zitadel-admin@zitadel.localhost`:
 
-# Start with Zitadel profile
-make docker-up   # starts everything including Zitadel
-```
+1. **Create a Project**: Instances → your instance → **Projects** → New
+2. **Create an Application** in that project:
+   - **Type**: User Agent (SPA)
+   - **Auth Method**: None (PKCE will be used)
+3. **Configure OIDC**:
+   - **Redirect URIs**: `http://localhost:5173/auth/callback`
+   - **Post Logout URIs**: `http://localhost:5173`
+   - **Response Types**: Code (`OIDC_RESPONSE_TYPE_CODE`)
+   - **Grant Types**: Authorization Code (`OIDC_GRANT_TYPE_AUTHORIZATION_CODE`), Refresh Token
+   - **Token Type**: JWT
+4. **Copy the Client ID** into `.env`:
+   ```bash
+   ZITADEL_CLIENT_ID=<your-client-id>
+   VITE_ZITADEL_CLIENT_ID=<your-client-id>
+   ```
 
-- **Zitadel Console**: http://localhost:8082/ui/console
-- **Login**: `zitadel-admin@zitadel.localhost` / `Password1!`
-- **Client Config**: Project → Application → OIDC → Redirect URIs: `http://localhost:5173/auth/callback`
+| Setting | Value |
+|---|---|
+| App Type | User Agent |
+| Auth Method | None |
+| Redirect URI | `http://localhost:5173/auth/callback` |
+| Post Logout URI | `http://localhost:5173` |
+| Response Type | Code |
+| Grant Types | Authorization Code, Refresh Token |
+| Token Type | JWT |
 
 ## Disabling Auth
 
