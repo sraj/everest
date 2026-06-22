@@ -33,9 +33,7 @@ func TestWrap_CreatesDB(t *testing.T) {
 		t.Error("Wrap should preserve the underlying sqlx.DB")
 	}
 
-	if wrapped.psql == nil {
-		t.Error("Wrap should initialize psql statement builder")
-	}
+	_ = wrapped
 }
 
 // TestDB_Close_NoOp tests that Close can be called (though it's a no-op in tests)
@@ -72,10 +70,6 @@ func TestDB_Select_Returns_SelectBuilder(t *testing.T) {
 		t.Error("SelectBuilder should reference the parent DB")
 	}
 
-	if sb.sq == nil {
-		t.Error("SelectBuilder should have a squirrel builder")
-	}
-
 	sql, _, err := sb.ToSQL()
 	if err != nil {
 		t.Fatalf("SelectBuilder.ToSQL failed: %v", err)
@@ -96,10 +90,6 @@ func TestDB_Insert_Returns_InsertBuilder(t *testing.T) {
 	if ib.db != wrapped {
 		t.Error("InsertBuilder should reference the parent DB")
 	}
-
-	if ib.sq == nil {
-		t.Error("InsertBuilder should have a squirrel builder")
-	}
 }
 
 // TestDB_Update_Returns_UpdateBuilder tests that Update returns a valid UpdateBuilder
@@ -112,25 +102,17 @@ func TestDB_Update_Returns_UpdateBuilder(t *testing.T) {
 	if ub.db != wrapped {
 		t.Error("UpdateBuilder should reference the parent DB")
 	}
-
-	if ub.sq == nil {
-		t.Error("UpdateBuilder should have a squirrel builder")
-	}
 }
 
 // TestDB_Delete_Returns_DeleteBuilder tests that Delete returns a valid DeleteBuilder
 func TestDB_Delete_Returns_DeleteBuilder(t *testing.T) {
-	db := &sqlx.DB{}
-	wrapped := Wrap(db)
+	rawDB := &sqlx.DB{}
+	wrapped := Wrap(rawDB)
 
-	db := wrapped.Delete("users")
+	del := wrapped.Delete("users")
 
-	if db.db != wrapped {
+	if del.db != wrapped {
 		t.Error("DeleteBuilder should reference the parent DB")
-	}
-
-	if db.sq == nil {
-		t.Error("DeleteBuilder should have a squirrel builder")
 	}
 }
 

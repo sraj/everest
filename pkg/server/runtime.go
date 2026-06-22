@@ -55,6 +55,8 @@ func Run(log *slog.Logger, servers ...Server) error {
 		go func() {
 			if err := s.Start(); err != nil {
 				errCh <- fmt.Errorf("%s server failed: %w", s.Name(), err)
+			} else {
+				errCh <- nil
 			}
 		}()
 	}
@@ -67,8 +69,10 @@ func Run(log *slog.Logger, servers ...Server) error {
 		if ctx.Err() != nil {
 			return shutdownAll(log, active...)
 		}
-		log.Error("server terminated", "error", err.Error())
-		_ = shutdownAll(log, active...)
+		if err != nil {
+			log.Error("server terminated", "error", err.Error())
+			_ = shutdownAll(log, active...)
+		}
 		return err
 	}
 }
