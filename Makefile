@@ -48,10 +48,15 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@rm -f coverage.out coverage.html
 
-# Start all services in Docker (full stack)
+# Start all services in Docker (full stack including Zitadel auth)
 docker-up:
 	@echo "Starting all Docker services..."
-	@docker compose up -d --build
+	@docker compose --profile zitadel up -d --build
+
+# Start without Zitadel (core services only)
+docker-core:
+	@echo "Starting core Docker services..."
+	@docker compose up -d --build postgres minio backend frontend
 
 # Start infrastructure services only (for local backend/frontend dev)
 docker-infra:
