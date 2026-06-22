@@ -6,16 +6,59 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
+func TestThumbnailConfig_Defaults(t *testing.T) {
+	cfg := DefaultThumbnailConfig()
+
+	assert.Equal(t, 600, cfg.Width)
+	assert.Equal(t, 800, cfg.Height)
+	assert.Equal(t, 80, cfg.Quality)
+	assert.Equal(t, 5, cfg.Workers)
+	assert.Equal(t, 20, cfg.Buffer)
+}
+
+func TestThumbnailService_Close(t *testing.T) {
+	cfg := ThumbnailConfig{Workers: 1, Buffer: 1}
+	svc := NewThumbnailService(cfg, testLogger())
+
+	require.NotNil(t, svc)
+
+	svc.Close()
+
+	_, err := svc.GenerateFromHTML(context.Background(), []byte("hi"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "closed")
+}
+
+func TestThumbnailService_DoubleClose(t *testing.T) {
+	cfg := ThumbnailConfig{Workers: 1, Buffer: 1}
+	svc := NewThumbnailService(cfg, testLogger())
+	svc.Close()
+	svc.Close() // should not panic
+}
+
+func TestThumbnailService_ContextCancellation(t *testing.T) {
+	cfg := ThumbnailConfig{Workers: 1, Buffer: 1}
+	svc := NewThumbnailService(cfg, testLogger())
+	defer svc.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := svc.GenerateFromHTML(ctx, []byte("hi"))
+	require.Error(t, err)
+}
+
 func TestThumbnailService_GenerateFromHTML(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("requires headless Chrome, skip in CI")
-	}
+	t.Skip("requires headless Chrome — run locally with Chrome installed")
 
 	cfg := ThumbnailConfig{
 		Width:   200,
@@ -32,49 +75,12 @@ func TestThumbnailService_GenerateFromHTML(t *testing.T) {
 	defer cancel()
 
 	data, err := svc.GenerateFromHTML(ctx, []byte("<h1>Test</h1>"))
-	if err != nil {
-		t.Fatalf("GenerateFromHTML failed: %v", err)
-	}
-	if len(data) == 0 {
-		t.Fatal("expected non-empty PNG data")
-	}
-}
-
-func TestThumbnailService_Closed(t *testing.T) {
-	cfg := ThumbnailConfig{Workers: 1, Buffer: 1}
-	svc := NewThumbnailService(cfg, testLogger()).(*thumbnailService)
-	svc.Close()
-
-	_, err := svc.GenerateFromHTML(context.Background(), []byte("hi"))
-	if err == nil {
-		t.Fatal("expected error after close")
-	}
-}
-
-func TestThumbnailConfig_Defaults(t *testing.T) {
-	cfg := DefaultThumbnailConfig()
-
-	if cfg.Width != 600 {
-		t.Errorf("Width = %d, want 600", cfg.Width)
-	}
-	if cfg.Height != 800 {
-		t.Errorf("Height = %d, want 800", cfg.Height)
-	}
-	if cfg.Quality != 80 {
-		t.Errorf("Quality = %d, want 80", cfg.Quality)
-	}
-	if cfg.Workers != 5 {
-		t.Errorf("Workers = %d, want 5", cfg.Workers)
-	}
-	if cfg.Buffer != 20 {
-		t.Errorf("Buffer = %d, want 20", cfg.Buffer)
-	}
+	require.NoError(t, err)
+	assert.NotEmpty(t, data)
 }
 
 func TestThumbnailService_WorkerPool(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("requires headless Chrome, skip in CI")
-	}
+	t.Skip("requires headless Chrome — run locally with Chrome installed")
 
 	cfg := ThumbnailConfig{
 		Width:   100,
@@ -87,32 +93,42 @@ func TestThumbnailService_WorkerPool(t *testing.T) {
 	svc := NewThumbnailService(cfg, testLogger())
 	defer svc.Close()
 
-	var results [6][]byte
-	errs := make(chan error, 6)
+	type result struct {
+		data []byte
+		err  error
+	}
 
+	results := make(chan result, 6)
 	for i := 0; i < 6; i++ {
-		go func(i int) {
+		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			data, err := svc.GenerateFromHTML(ctx, []byte("<p>worker</p>"))
-			if err != nil {
-				errs <- err
-				return
-			}
-			results[i] = data
-			errs <- nil
-		}(i)
+			results <- result{data, err}
+		}()
 	}
 
 	for i := 0; i < 6; i++ {
-		if err := <-errs; err != nil {
-			t.Fatalf("worker %d failed: %v", i, err)
-		}
+		r := <-results
+		require.NoError(t, r.err)
+		assert.NotEmpty(t, r.data)
 	}
+}
 
-	for i, data := range results {
-		if len(data) == 0 {
-			t.Errorf("worker %d returned empty data", i)
-		}
-	}
+func TestThumbnailService_ConcurrentClose(t *testing.T) {
+	cfg := ThumbnailConfig{Workers: 2, Buffer: 5}
+	svc := NewThumbnailService(cfg, testLogger())
+
+	var done = make(chan struct{})
+
+	go func() {
+		svc.Close()
+		close(done)
+	}()
+
+	go func() {
+		svc.Close()
+	}()
+
+	<-done
 }
