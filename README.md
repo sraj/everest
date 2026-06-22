@@ -29,12 +29,12 @@ A Google Docs-like document management application with real-time document editi
 
 ## Quick Start
 
-### Using Docker (Recommended)
+### Option 1: Full Docker Stack
 
-Start the complete development environment with a single command:
+Single command:
 
 ```bash
-docker compose up --build
+make docker-up
 ```
 
 This starts all services:
@@ -43,27 +43,26 @@ This starts all services:
 - **MinIO Console**: http://localhost:9001 (admin/minioadmin)
 - **PostgreSQL**: localhost:5432
 
-After services are up, apply migrations:
+After services are up, apply migrations and seed:
 
 ```bash
-cat migrations/000001_init_schema.up.sql | docker compose exec -T postgres psql -U postgres everest
-cat migrations/000002_add_thumbnail.up.sql | docker compose exec -T postgres psql -U postgres everest
-cat seeds/001_default_user.sql | docker compose exec -T postgres psql -U postgres everest
+make migrate-up
+make seed
 ```
 
 To stop:
 
 ```bash
-docker compose down
+make docker-down
 ```
 
 To stop and remove all data:
 
 ```bash
-docker compose down -v
+make docker-down -v
 ```
 
-### Local Development (Without Docker)
+### Option 2: Local Development (Hot Reload)
 
 #### Prerequisites
 
@@ -85,9 +84,9 @@ docker compose down -v
    cp .env.example .env
    ```
 
-3. **Start infrastructure services:**
+3. **Start infrastructure services only:**
    ```bash
-   make docker-up
+   make docker-infra
    ```
 
 4. **Run database migrations:**
@@ -173,7 +172,8 @@ Run `make help` for a full list of available commands:
 ### Database
 | Command | Description |
 |---------|-------------|
-| `make docker-up` | Start Docker services (PostgreSQL, MinIO) |
+| `make docker-up` | Start all services in Docker (full stack with `--build`) |
+| `make docker-infra` | Start infrastructure only (PostgreSQL, MinIO) |
 | `make docker-down` | Stop Docker services |
 | `make migrate-up` | Apply all pending migrations |
 | `make migrate-down` | Roll back all migrations |
@@ -202,33 +202,38 @@ Run `make help` for a full list of available commands:
 
 ```
 everest/
-├── .air.toml            # Hot-reload configuration (air)
+├── .air.toml                 # Hot-reload configuration (air)
 ├── cmd/
-│   ├── server/          # Main application entrypoint
-│   └── migrate/         # Migration CLI
+│   ├── server/               # Main application entrypoint
+│   └── migrate/              # Migration CLI
 ├── internal/
-│   ├── config/          # Configuration loading
+│   ├── config/               # App-specific configuration (uses configx)
 │   ├── domain/
-│   │   ├── model/       # Domain models (Document, User)
-│   │   └── repository/  # Repository interfaces
-│   ├── handler/         # HTTP handlers
+│   │   ├── model/            # Domain models (Document, User) + pagination types
+│   │   └── repository/       # Repository interfaces (split by concern)
+│   ├── handler/
+│   │   ├── http/             # Fiber HTTP handlers
+│   │   └── grpc/             # gRPC service stubs (optional)
 │   ├── infrastructure/
-│   │   ├── minio/       # MinIO content repository
-│   │   └── postgres/    # PostgreSQL repositories
-│   ├── logger/          # Logging setup
-│   └── service/         # Business logic services
-├── migrations/          # SQL migration files
-├── seeds/               # Database seed files
-├── web/                 # React frontend
+│   │   ├── minio/            # MinIO content repository
+│   │   └── postgres/         # PostgreSQL repositories
+│   └── service/              # Business logic with interfaces
+├── migrations/               # SQL migration files
+├── seeds/                    # Database seed files
+├── pkg/
+│   ├── configx/              # Generic env config loader
+│   ├── dbx/                  # PostgreSQL query builder (CTEs, pagination, tx)
+│   ├── logger/               # slog handler backed by zerolog
+│   └── server/               # HTTP/gRPC server lifecycle
+├── web/                      # React frontend
 │   ├── src/
-│   │   ├── pages/       # Page components (Home, DocumentEditor)
-│   │   ├── components/  # Reusable components (Editor)
-│   │   └── store/       # Redux store (documents slice)
-│   ├── public/          # Static assets
-│   └── Dockerfile       # Frontend Docker image
-├── docker-compose.yml   # Services: postgres, minio, backend, frontend
-├── Dockerfile           # Backend Docker image (with Chromium)
-└── Makefile             # Build and dev commands
+│   │   ├── pages/            # Page components (Home, DocumentEditor)
+│   │   ├── components/       # Reusable components (Editor, toolbar)
+│   │   └── store/            # Redux store (documents slice)
+│   └── Dockerfile            # Frontend Docker image
+├── docker-compose.yml        # Services: postgres, minio, backend, frontend
+├── Dockerfile                # Backend Docker image (with Chromium)
+└── Makefile                  # Build and dev commands
 ```
 
 ## Environment Variables
@@ -238,7 +243,7 @@ See `.env.example` for all available configuration options:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `APP_NAME` | Application name | `everest` |
-| `PORT` | Server port | `8080` |
+| `PORT` | HTTP server port (empty to disable) | `8080` |
 | `LOG_LEVEL` | Log level (debug, info, warn, error) | `info` |
 | `CORS_ORIGINS` | Allowed CORS origins | `*` |
 | `DATABASE_URL` | PostgreSQL connection string | - |
@@ -247,19 +252,22 @@ See `.env.example` for all available configuration options:
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | MinIO bucket name | `documents` |
 | `MINIO_USE_SSL` | Use SSL for MinIO | `false` |
+| `GRPC_PORT` | gRPC server port (empty to disable) | `""` |
 
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/v1/documents` | List all documents |
+| `GET` | `/api/v1/documents?page=1&size=20` | List documents (paginated) |
 | `POST` | `/api/v1/documents` | Create a document |
 | `GET` | `/api/v1/documents/:id` | Get a document |
 | `PUT` | `/api/v1/documents/:id` | Update a document |
 | `DELETE` | `/api/v1/documents/:id` | Delete a document |
 | `GET` | `/api/v1/documents/:id/download` | Download document content |
 | `GET` | `/api/v1/documents/:id/thumbnail` | Get document thumbnail |
+
+Pagination: list endpoint supports `?page=` (default 1) and `?size=` (default 20, max 100). Returns `total`, `page`, `page_size`, `total_pages` metadata.
 
 ## License
 
