@@ -63,7 +63,7 @@ func main() {
 
 	var authMiddleware fiber.Handler
 	if cfg.ZitadelClientID != "" && cfg.ZitadelClientID != "<created-in-zitadel-console>" {
-		verifier, err := zitadel.NewVerifier(cfg.ZitadelIssuer, cfg.ZitadelClientID, log)
+		verifier, err := zitadel.NewVerifier(cfg.ZitadelIssuer, log)
 		if err != nil {
 			log.Error("Zitadel verifier initialization failed, continuing without auth", "error", err)
 		} else {
