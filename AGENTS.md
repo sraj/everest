@@ -32,7 +32,7 @@ After first login to `http://localhost:8082/ui/console` as `zitadel-admin@zitade
 
 1. **Create a Project**: Instances → your instance → **Projects** → New
 2. **Create an Application** in that project:
-   - **Type**: User Agent (SPA)
+   - **Type**: Web (Zitadel v4 requires Web for HTTP redirects with code grant; User Agent enforces HTTPS)
    - **Auth Method**: None (PKCE will be used)
 3. **Configure OIDC**:
    - **Redirect URIs**: `http://localhost:5173/auth/callback`
