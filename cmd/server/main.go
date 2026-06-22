@@ -56,6 +56,7 @@ func main() {
 
 	docRepo := postgres.NewDocumentRepository(db)
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), log)
+	defer thumbnailSvc.Close()
 	docService := service.NewDocumentService(docRepo, contentRepo, thumbnailSvc, log)
 
 	httpHandler := handlerhttp.New(docService, log)
