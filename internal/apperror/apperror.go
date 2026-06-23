@@ -1,18 +1,22 @@
 package apperror
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/go-playground/validator/v10"
 )
 
 // AppError is a structured application error with a machine-readable kind
 // and an HTTP status code. Return this from handlers — the error handler
 // middleware will serialize it to JSON with the right status.
 type AppError struct {
-	Kind    string `json:"kind"`
-	Message string `json:"message"`
-	Status  int    `json:"-"`
-	Err     error  `json:"-"`
+	Kind    string         `json:"kind"`
+	Message string         `json:"message"`
+	Status  int            `json:"-"`
+	Data    map[string]any `json:"data,omitempty"`
+	Err     error          `json:"-"`
 }
 
 func (e *AppError) Error() string {
@@ -58,4 +62,26 @@ func Conflict(format string, args ...any) *AppError {
 // when you want to preserve the original error for logging.
 func Wrap(err error, status int, kind, format string, args ...any) *AppError {
 	return newAppError(status, kind, fmt.Sprintf(format, args...), err)
+}
+
+// ValidationError converts validator.ValidationErrors into a 422 AppError
+// with per-field error details.
+func ValidationError(err error) *AppError {
+	var ve validator.ValidationErrors
+	if errors.As(err, &ve) {
+		fields := make(map[string]any, len(ve))
+		for _, fe := range ve {
+			fields[fe.Field()] = map[string]string{
+				"tag":   fe.Tag(),
+				"param": fe.Param(),
+			}
+		}
+		return &AppError{
+			Status:  http.StatusUnprocessableEntity,
+			Kind:    "validation",
+			Message: "validation failed",
+			Data:    fields,
+		}
+	}
+	return BadRequest("validation failed: %v", err)
 }

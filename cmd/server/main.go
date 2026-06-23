@@ -12,6 +12,7 @@ import (
 	"github.com/sraj/everest/internal/infrastructure/minio"
 	"github.com/sraj/everest/internal/infrastructure/postgres"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/store"
 	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
 	"github.com/sraj/everest/pkg/logger"
@@ -51,7 +52,7 @@ func main() {
 	}
 	log.Info("Connected to PostgreSQL")
 
-	contentRepo, err := minio.NewContentRepository(minio.Config{
+	contentStore, err := minio.NewContentStore(minio.Config{
 		Endpoint:  cfg.MinIOEndpoint,
 		AccessKey: cfg.MinIOAccessKey,
 		SecretKey: cfg.MinIOSecretKey,
@@ -76,10 +77,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	docRepo := postgres.NewDocumentRepository(db)
+	docStore := postgres.NewDocumentStore(db)
+	st := store.New(docStore, contentStore, db.Close, db.Ping)
+
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), log)
 	defer thumbnailSvc.Close()
-	docService := service.NewDocumentService(docRepo, contentRepo, thumbnailSvc, log)
+	docService := service.NewDocumentService(st, thumbnailSvc, log)
 
 	httpHandler := handlerhttp.New(docService, log)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {

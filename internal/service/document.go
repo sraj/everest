@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/internal/domain/repository"
+	"github.com/sraj/everest/internal/store"
 )
 
 // DocumentService defines the interface for document business logic
@@ -22,22 +24,15 @@ type DocumentService interface {
 }
 
 type documentService struct {
-	docRepo      repository.DocumentRepository
-	contentRepo  repository.ContentRepository
+	store        store.Store
 	thumbnailSvc ThumbnailService
 	log          *slog.Logger
 }
 
-// NewDocumentService creates a new document service
-func NewDocumentService(
-	docRepo repository.DocumentRepository,
-	contentRepo repository.ContentRepository,
-	thumbnailSvc ThumbnailService,
-	log *slog.Logger,
-) DocumentService {
+// NewDocumentService creates a new document service.
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, log *slog.Logger) DocumentService {
 	return &documentService{
-		docRepo:      docRepo,
-		contentRepo:  contentRepo,
+		store:        st,
 		thumbnailSvc: thumbnailSvc,
 		log:          log,
 	}
@@ -62,7 +57,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	if contentType == "" {
 		contentType = "text/html"
 	}
-	if err := s.contentRepo.Save(ctx, contentID, input.Content, contentType); err != nil {
+	if err := s.store.Content().Save(ctx, contentID, input.Content, contentType); err != nil {
 		s.log.Error("failed to save document content", "error", err)
 		return nil, err
 	}
@@ -82,10 +77,9 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
 	}
 
-	if err := s.docRepo.Create(ctx, doc); err != nil {
+	if err := s.store.Document().Create(ctx, doc); err != nil {
 		s.log.Error("failed to create document", "error", err)
-		// Cleanup content on failure
-		_ = s.contentRepo.Delete(ctx, contentID)
+		_ = s.store.Content().Delete(ctx, contentID)
 		return nil, err
 	}
 
@@ -94,17 +88,21 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 
 // GetByID retrieves a document by ID
 func (s *documentService) GetByID(ctx context.Context, id string) (*model.Document, error) {
-	return s.docRepo.GetByID(ctx, id)
+	doc, err := s.store.Document().GetByID(ctx, id)
+	if err != nil {
+		return nil, s.translateError(err, id)
+	}
+	return doc, nil
 }
 
 // GetContent retrieves document content
 func (s *documentService) GetContent(ctx context.Context, id string) ([]byte, error) {
-	doc, err := s.docRepo.GetByID(ctx, id)
+	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, s.translateError(err, id)
 	}
 
-	return s.contentRepo.Get(ctx, doc.ContentID)
+	return s.store.Content().Get(ctx, doc.ContentID)
 }
 
 // UpdateDocumentInput represents input for updating a document
@@ -116,14 +114,14 @@ type UpdateDocumentInput struct {
 
 // Update updates an existing document
 func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error) {
-	doc, err := s.docRepo.GetByID(ctx, input.ID)
+	doc, err := s.store.Document().GetByID(ctx, input.ID)
 	if err != nil {
-		return nil, err
+		return nil, s.translateError(err, input.ID)
 	}
 
 	// Update content in MinIO
 	if input.Content != nil {
-		if err := s.contentRepo.Save(ctx, doc.ContentID, input.Content, "text/html"); err != nil {
+		if err := s.store.Content().Save(ctx, doc.ContentID, input.Content, "text/html"); err != nil {
 			s.log.Error("failed to update document content", "error", err)
 			return nil, err
 		}
@@ -140,8 +138,8 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 	}
 	doc.UpdatedAt = time.Now()
 
-	if err := s.docRepo.Update(ctx, doc); err != nil {
-		return nil, err
+	if err := s.store.Document().Update(ctx, doc); err != nil {
+		return nil, s.translateError(err, input.ID)
 	}
 
 	return doc, nil
@@ -149,45 +147,48 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 
 // Delete deletes a document
 func (s *documentService) Delete(ctx context.Context, id string) error {
-	doc, err := s.docRepo.GetByID(ctx, id)
+	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
-		return err
+		return s.translateError(err, id)
 	}
 
 	// Delete content from MinIO
-	if err := s.contentRepo.Delete(ctx, doc.ContentID); err != nil {
+	if err := s.store.Content().Delete(ctx, doc.ContentID); err != nil {
 		s.log.Error("failed to delete document content", "error", err)
 		// Continue with document deletion
 	}
 
 	// Delete thumbnail from MinIO
 	if doc.ThumbnailID != nil && *doc.ThumbnailID != "" {
-		if err := s.contentRepo.Delete(ctx, *doc.ThumbnailID); err != nil {
+		if err := s.store.Content().Delete(ctx, *doc.ThumbnailID); err != nil {
 			s.log.Error("failed to delete document thumbnail", "error", err)
 			// Continue with document deletion
 		}
 	}
 
-	return s.docRepo.Delete(ctx, id)
+	if err := s.store.Document().Delete(ctx, id); err != nil {
+		return s.translateError(err, id)
+	}
+	return nil
 }
 
 // List lists documents with pagination
 func (s *documentService) List(ctx context.Context, page model.Page) (*model.PageResult, error) {
-	return s.docRepo.List(ctx, page)
+	return s.store.Document().List(ctx, page)
 }
 
 // GetThumbnail retrieves document thumbnail
 func (s *documentService) GetThumbnail(ctx context.Context, id string) ([]byte, error) {
-	doc, err := s.docRepo.GetByID(ctx, id)
+	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, s.translateError(err, id)
 	}
 
 	if doc.ThumbnailID == nil || *doc.ThumbnailID == "" {
 		return nil, nil // No thumbnail available
 	}
 
-	return s.contentRepo.Get(ctx, *doc.ThumbnailID)
+	return s.store.Content().Get(ctx, *doc.ThumbnailID)
 }
 
 // generateAndSaveThumbnail generates a thumbnail and saves it to storage
@@ -204,7 +205,7 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	// Get the document to check if it still exists
-	doc, err := s.docRepo.GetByID(ctx, docID)
+	doc, err := s.store.Document().GetByID(ctx, docID)
 	if err != nil {
 		s.log.Error("document not found for thumbnail", "error", err, "doc_id", docID)
 		return
@@ -218,7 +219,7 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	// Save thumbnail to MinIO
-	if err := s.contentRepo.Save(ctx, *thumbnailID, thumbnail, "image/png"); err != nil {
+	if err := s.store.Content().Save(ctx, *thumbnailID, thumbnail, "image/png"); err != nil {
 		s.log.Error("failed to save thumbnail", "error", err, "doc_id", docID)
 		return
 	}
@@ -226,10 +227,22 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	// Update document with thumbnail ID
 	doc.ThumbnailID = thumbnailID
 	doc.UpdatedAt = time.Now()
-	if err := s.docRepo.Update(ctx, doc); err != nil {
+	if err := s.store.Document().Update(ctx, doc); err != nil {
 		s.log.Error("failed to update document with thumbnail", "error", err, "doc_id", docID)
 		return
 	}
 
 	s.log.Info("thumbnail generated and saved", "doc_id", docID, "thumbnail_id", thumbnailID)
+}
+
+func (s *documentService) translateError(err error, id string) error {
+	var nfErr store.ErrNotFound
+	if errors.As(err, &nfErr) {
+		return apperror.NotFound("document %s not found", nfErr.ID)
+	}
+	var cfErr store.ErrConflict
+	if errors.As(err, &cfErr) {
+		return apperror.Conflict("document %s: %s already exists", cfErr.Field, cfErr.Resource)
+	}
+	return err
 }
