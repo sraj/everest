@@ -144,7 +144,7 @@ func (s *thumbnailService) GenerateFromHTML(ctx context.Context, htmlContent []b
 	select {
 	case r := <-job.result:
 		if r.err != nil {
-			s.log.Error("thumbnail generation failed", "error", r.err)
+			s.log.Error("thumbnail generation failed", "error", r.err.Error())
 			return nil, r.err
 		}
 		s.log.Debug("thumbnail generated", "size", len(r.data))

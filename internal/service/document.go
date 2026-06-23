@@ -58,7 +58,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		contentType = "text/html"
 	}
 	if err := s.store.Content().Save(ctx, contentID, input.Content, contentType); err != nil {
-		s.log.Error("failed to save document content", "error", err)
+		s.log.Error("failed to save document content", "error", err.Error())
 		return nil, err
 	}
 
@@ -72,15 +72,15 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		UpdatedAt: now,
 	}
 
-	// Generate thumbnail asynchronously (don't block document creation)
-	if s.thumbnailSvc != nil && len(input.Content) > 0 {
-		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
-	}
-
 	if err := s.store.Document().Create(ctx, doc); err != nil {
-		s.log.Error("failed to create document", "error", err)
+		s.log.Error("failed to create document", "error", err.Error())
 		_ = s.store.Content().Delete(ctx, contentID)
 		return nil, err
+	}
+
+	// Generate thumbnail asynchronously after document exists in DB
+	if s.thumbnailSvc != nil && len(input.Content) > 0 {
+		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
 	}
 
 	return doc, nil
@@ -122,7 +122,7 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 	// Update content in MinIO
 	if input.Content != nil {
 		if err := s.store.Content().Save(ctx, doc.ContentID, input.Content, "text/html"); err != nil {
-			s.log.Error("failed to update document content", "error", err)
+			s.log.Error("failed to update document content", "error", err.Error())
 			return nil, err
 		}
 
@@ -154,14 +154,14 @@ func (s *documentService) Delete(ctx context.Context, id string) error {
 
 	// Delete content from MinIO
 	if err := s.store.Content().Delete(ctx, doc.ContentID); err != nil {
-		s.log.Error("failed to delete document content", "error", err)
+		s.log.Error("failed to delete document content", "error", err.Error())
 		// Continue with document deletion
 	}
 
 	// Delete thumbnail from MinIO
 	if doc.ThumbnailID != nil && *doc.ThumbnailID != "" {
 		if err := s.store.Content().Delete(ctx, *doc.ThumbnailID); err != nil {
-			s.log.Error("failed to delete document thumbnail", "error", err)
+			s.log.Error("failed to delete document thumbnail", "error", err.Error())
 			// Continue with document deletion
 		}
 	}
@@ -200,14 +200,14 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	// Generate thumbnail
 	thumbnail, err := s.thumbnailSvc.GenerateFromHTML(ctx, content)
 	if err != nil {
-		s.log.Error("failed to generate thumbnail", "error", err, "doc_id", docID)
+		s.log.Error("failed to generate thumbnail", "error", err.Error(), "doc_id", docID)
 		return
 	}
 
 	// Get the document to check if it still exists
 	doc, err := s.store.Document().GetByID(ctx, docID)
 	if err != nil {
-		s.log.Error("document not found for thumbnail", "error", err, "doc_id", docID)
+		s.log.Error("document not found for thumbnail", "error", err.Error(), "doc_id", docID)
 		return
 	}
 
@@ -220,7 +220,7 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 
 	// Save thumbnail to MinIO
 	if err := s.store.Content().Save(ctx, *thumbnailID, thumbnail, "image/png"); err != nil {
-		s.log.Error("failed to save thumbnail", "error", err, "doc_id", docID)
+		s.log.Error("failed to save thumbnail", "error", err.Error(), "doc_id", docID)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	doc.ThumbnailID = thumbnailID
 	doc.UpdatedAt = time.Now()
 	if err := s.store.Document().Update(ctx, doc); err != nil {
-		s.log.Error("failed to update document with thumbnail", "error", err, "doc_id", docID)
+		s.log.Error("failed to update document with thumbnail", "error", err.Error(), "doc_id", docID)
 		return
 	}
 

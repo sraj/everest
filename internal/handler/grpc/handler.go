@@ -46,7 +46,7 @@ func (s *documentServer) Create(ctx context.Context, req *documentsv1.CreateRequ
 		ContentType: req.ContentType,
 	})
 	if err != nil {
-		s.log.Error("grpc: failed to create document", "error", err)
+		s.log.Error("grpc: failed to create document", "error", err.Error())
 		return nil, toGRPCError(err)
 	}
 	return toProtoDocument(doc), nil
@@ -93,7 +93,7 @@ func (s *documentServer) Update(ctx context.Context, req *documentsv1.UpdateRequ
 		Content: req.Content,
 	})
 	if err != nil {
-		s.log.Error("grpc: failed to update document", "error", err)
+		s.log.Error("grpc: failed to update document", "error", err.Error())
 		return nil, toGRPCError(err)
 	}
 	return toProtoDocument(doc), nil

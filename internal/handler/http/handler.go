@@ -156,7 +156,7 @@ func (h *Handler) listDocuments(c *fiber.Ctx) error {
 
 	result, err := h.docService.List(c.Context(), p)
 	if err != nil {
-		h.log.Error("failed to list documents", "error", err)
+		h.log.Error("failed to list documents", "error", err.Error())
 		return apperror.Internal("failed to list documents")
 	}
 
@@ -204,7 +204,7 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 		ContentType: contentType,
 	})
 	if err != nil {
-		h.log.Error("failed to create document", "error", err)
+		h.log.Error("failed to create document", "error", err.Error())
 		return apperror.Internal("failed to create document")
 	}
 
@@ -223,7 +223,7 @@ func (h *Handler) getDocument(c *fiber.Ctx) error {
 
 	content, err := h.docService.GetContent(c.Context(), id)
 	if err != nil {
-		h.log.Error("failed to get document content", "error", err)
+		h.log.Error("failed to get document content", "error", err.Error())
 		content = []byte{}
 	}
 
@@ -242,7 +242,7 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 
 	content, err := h.docService.GetContent(c.Context(), id)
 	if err != nil {
-		h.log.Error("failed to get document content", "error", err)
+		h.log.Error("failed to get document content", "error", err.Error())
 		return apperror.Internal("failed to get document content")
 	}
 
@@ -263,7 +263,7 @@ func (h *Handler) getDocumentThumbnail(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 
-	c.Set("Cache-Control", "public, max-age=3600")
+	c.Set("Cache-Control", "public, max-age=60, must-revalidate")
 	c.Set("Content-Type", "image/png")
 	return c.Send(thumbnail)
 }
@@ -298,7 +298,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 		Content: content,
 	})
 	if err != nil {
-		h.log.Error("failed to update document", "error", err)
+		h.log.Error("failed to update document", "error", err.Error())
 		return apperror.Internal("failed to update document")
 	}
 
@@ -309,7 +309,7 @@ func (h *Handler) deleteDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 
 	if err := h.docService.Delete(c.Context(), id); err != nil {
-		h.log.Error("failed to delete document", "error", err)
+		h.log.Error("failed to delete document", "error", err.Error())
 		return apperror.Internal("failed to delete document")
 	}
 
