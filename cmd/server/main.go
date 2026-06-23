@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/sraj/everest/internal/infrastructure/postgres"
 	"github.com/sraj/everest/internal/infrastructure/zitadel"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/store"
+	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
 	"github.com/sraj/everest/pkg/logger"
 	"github.com/sraj/everest/pkg/server"
@@ -20,10 +23,18 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid configuration: %v\n", err)
+		os.Exit(1)
+	}
 	log := logger.New(cfg.LogLevel, cfg.AppName)
 
-	log.Info("Starting server...")
+	log.Info("Starting server",
+		"version", version.Version,
+		"commit", version.Commit,
+		"build_date", version.BuildDate,
+	)
 
 	db, err := dbx.New(dbx.DBConfig{
 		DSN:             cfg.DatabaseURL,
@@ -44,7 +55,7 @@ func main() {
 	}
 	log.Info("Connected to PostgreSQL")
 
-	contentRepo, err := minio.NewContentRepository(minio.Config{
+	contentStore, err := minio.NewContentStore(minio.Config{
 		Endpoint:  cfg.MinIOEndpoint,
 		AccessKey: cfg.MinIOAccessKey,
 		SecretKey: cfg.MinIOSecretKey,
@@ -57,10 +68,24 @@ func main() {
 	}
 	log.Info("Connected to MinIO")
 
-	docRepo := postgres.NewDocumentRepository(db)
+	minioClient, err := minio.NewClient(minio.Config{
+		Endpoint:  cfg.MinIOEndpoint,
+		AccessKey: cfg.MinIOAccessKey,
+		SecretKey: cfg.MinIOSecretKey,
+		Bucket:    cfg.MinIOBucket,
+		UseSSL:    cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		log.Error("Failed to create MinIO client for health checks", "error", err)
+		os.Exit(1)
+	}
+
+	docStore := postgres.NewDocumentStore(db)
+	st := store.New(docStore, contentStore, db.Close, db.Ping)
+
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), log)
 	defer thumbnailSvc.Close()
-	docService := service.NewDocumentService(docRepo, contentRepo, thumbnailSvc, log)
+	docService := service.NewDocumentService(st, thumbnailSvc, log)
 
 	var authMiddleware fiber.Handler
 	if cfg.ZitadelClientID != "" && cfg.ZitadelClientID != "<created-in-zitadel-console>" {
@@ -76,13 +101,23 @@ func main() {
 	}
 
 	httpHandler := handlerhttp.New(docService, log, authMiddleware)
-	grpcHandler := handlergrpc.New(docService)
+	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
+		return db.Ping(ctx)
+	})
+	httpHandler.AddHealthCheck("storage", func(ctx context.Context) error {
+		_, err := minioClient.BucketExists(ctx, cfg.MinIOBucket)
+		return err
+	})
+
+	grpcHandler := handlergrpc.New(docService, log)
 
 	httpServer := server.NewHTTP(server.HTTPConfig{
-		AppName:      cfg.AppName,
-		Port:         cfg.Port,
-		CORSOrigins:  cfg.CORSOrigins,
-		ErrorHandler: handlerhttp.ErrorHandler(log),
+		AppName:        cfg.AppName,
+		Port:           cfg.Port,
+		CORSOrigins:    cfg.CORSOrigins,
+		RateLimitMax:   100,
+		RequestTimeout: 30 * time.Second,
+		ErrorHandler:   handlerhttp.ErrorHandler(log),
 	}, httpHandler, log)
 
 	grpcServer := server.NewGRPC(server.GRPCConfig{

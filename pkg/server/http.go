@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/sraj/everest/pkg/logger"
@@ -13,10 +15,12 @@ import (
 
 // HTTPConfig contains HTTP server configuration.
 type HTTPConfig struct {
-	AppName      string
-	Port         string
-	CORSOrigins  string
-	ErrorHandler fiber.ErrorHandler
+	AppName        string
+	Port           string
+	CORSOrigins    string
+	RateLimitMax   int           // max requests per minute, 0 = disabled
+	RequestTimeout time.Duration // per-request context timeout, 0 = disabled
+	ErrorHandler   fiber.ErrorHandler
 }
 
 // RouteRegistrar registers application routes.
@@ -50,6 +54,30 @@ func NewHTTP(cfg HTTPConfig, routes RouteRegistrar, log *slog.Logger) Server {
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH, OPTIONS",
 	}))
 	app.Use(logger.Middleware(log))
+
+	if cfg.RateLimitMax > 0 {
+		app.Use(limiter.New(limiter.Config{
+			Max:        cfg.RateLimitMax,
+			Expiration: 1 * time.Minute,
+			KeyGenerator: func(c *fiber.Ctx) string {
+				return c.IP()
+			},
+			LimitReached: func(c *fiber.Ctx) error {
+				return c.Status(fiber.StatusTooManyRequests).JSON(fiber.Map{
+					"error": "rate limit exceeded, try again later",
+				})
+			},
+		}))
+	}
+
+	if cfg.RequestTimeout > 0 {
+		app.Use(func(c *fiber.Ctx) error {
+			ctx, cancel := context.WithTimeout(c.Context(), cfg.RequestTimeout)
+			defer cancel()
+			c.SetUserContext(ctx)
+			return c.Next()
+		})
+	}
 
 	routes.RegisterRoutes(app)
 

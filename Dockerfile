@@ -46,8 +46,8 @@ ENV CHROME_PATH=/usr/bin/chromium-browser
 # Copy binary from builder
 COPY --from=builder /app/server .
 
-# Copy migrations
-COPY --from=builder /app/migrations ./migrations
+# Copy database files
+COPY --from=builder /app/db ./db
 
 EXPOSE 8080
 

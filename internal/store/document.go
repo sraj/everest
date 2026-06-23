@@ -1,4 +1,4 @@
-package repository
+package store
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"github.com/sraj/everest/internal/domain/model"
 )
 
-// DocumentRepository defines the interface for document persistence
-type DocumentRepository interface {
+// DocumentStore defines the interface for document persistence.
+type DocumentStore interface {
 	Create(ctx context.Context, doc *model.Document) error
 	GetByID(ctx context.Context, id string) (*model.Document, error)
 	GetByOwnerID(ctx context.Context, ownerID string) ([]*model.Document, error)
