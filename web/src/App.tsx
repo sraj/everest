@@ -5,6 +5,7 @@ import { store } from './store'
 import { AuthProvider } from './auth/AuthProvider'
 import { Home } from './pages/Home'
 import { DocumentEditor } from './pages/DocumentEditor'
+import { Profile } from './pages/Profile'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/documents/:id" element={<DocumentEditor />} />
+              <Route path="/profile" element={<Profile />} />
             </Routes>
           </div>
         </AuthProvider>
