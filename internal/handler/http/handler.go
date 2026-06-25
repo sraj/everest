@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/internal/infrastructure/zitadel"
+	"github.com/sraj/everest/internal/datastore/zitadel"
 	"github.com/sraj/everest/internal/service"
 	"github.com/sraj/everest/internal/version"
 )
