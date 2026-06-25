@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -33,11 +32,6 @@ type sessionCookie struct {
 
 func newSessionCookie(secret string, log *slog.Logger) *sessionCookie {
 	key := []byte(secret)
-	if secret == "" {
-		key = make([]byte, 32)
-		rand.Read(key)
-		log.Warn("no SESSION_SECRET set, using random key — sessions lost on restart")
-	}
 	return &sessionCookie{
 		sc:  gorilla.New(key),
 		log: log,
@@ -147,6 +141,7 @@ type BFFConfig struct {
 type BFFHandler struct {
 	cfg       BFFConfig
 	cookie    *sessionCookie
+	verifier  *Verifier
 	client    *http.Client
 	endpoints oidcEndpoints
 	log       *slog.Logger
@@ -161,6 +156,9 @@ type oidcEndpoints struct {
 func NewBFFHandler(cfg BFFConfig) (*BFFHandler, error) {
 	if cfg.ClientID == "" {
 		return nil, fmt.Errorf("ZITADEL_CLIENT_ID is required for BFF auth")
+	}
+	if cfg.SessionSecret == "" {
+		return nil, fmt.Errorf("ZITADEL_SESSION_SECRET is required for BFF auth")
 	}
 	if cfg.RedirectURI == "" {
 		cfg.RedirectURI = "http://localhost:8080/auth/callback"
@@ -183,10 +181,16 @@ func NewBFFHandler(cfg BFFConfig) (*BFFHandler, error) {
 		return nil, fmt.Errorf("parse discovery: %w", err)
 	}
 
+	verifier, err := NewVerifier(cfg.Issuer, cfg.Log)
+	if err != nil {
+		return nil, fmt.Errorf("create token verifier: %w", err)
+	}
+
 	return &BFFHandler{
-		cfg:    cfg,
-		cookie: newSessionCookie(cfg.SessionSecret, cfg.Log),
-		client: httpClient,
+		cfg:      cfg,
+		cookie:   newSessionCookie(cfg.SessionSecret, cfg.Log),
+		verifier: verifier,
+		client:   httpClient,
 		endpoints: oidcEndpoints{
 			auth:       disc.AuthorizationEndpoint,
 			token:      disc.TokenEndpoint,
@@ -275,8 +279,7 @@ func (h *BFFHandler) handleCallback(c *fiber.Ctx) error {
 	defer tokenResp.Body.Close()
 
 	if tokenResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(tokenResp.Body)
-		h.log.Error("token exchange non-200", "status", tokenResp.StatusCode, "body", string(body))
+		h.log.Error("token exchange failed", "status", tokenResp.StatusCode)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "token exchange failed",
 		})
@@ -290,11 +293,11 @@ func (h *BFFHandler) handleCallback(c *fiber.Ctx) error {
 		})
 	}
 
-	user, err := parseIDTokenClaims(tokenResult.IDToken)
+	user, err := h.verifier.VerifyIDToken(tokenResult.IDToken)
 	if err != nil {
-		h.log.Error("parse id token", "error", err.Error())
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "failed to parse identity",
+		h.log.Error("verify id token", "error", err.Error())
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "authentication failed",
 		})
 	}
 
@@ -350,30 +353,6 @@ func randomString(n int) string {
 func sha256Sum(data []byte) []byte {
 	h := sha256.Sum256(data)
 	return h[:]
-}
-
-func parseIDTokenClaims(raw string) (*IntrospectUser, error) {
-	parts := strings.Split(raw, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid JWT format")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("decode JWT payload: %w", err)
-	}
-	var claims struct {
-		Sub   string `json:"sub"`
-		Email string `json:"email"`
-		Name  string `json:"name"`
-	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("parse JWT claims: %w", err)
-	}
-	return &IntrospectUser{
-		Sub:   claims.Sub,
-		Email: claims.Email,
-		Name:  claims.Name,
-	}, nil
 }
 
 type discoveryConfig struct {

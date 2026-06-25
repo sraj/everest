@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -125,32 +126,38 @@ func (v *Verifier) Middleware() fiber.Handler {
 			})
 		}
 
-		claims := &customClaims{}
-		parsed, err := jwt.ParseWithClaims(token, claims, v.jwks.Keyfunc,
-			jwt.WithIssuer(v.iss),
-			jwt.WithValidMethods([]string{"RS256", "RS384", "RS512"}),
-			jwt.WithLeeway(30*time.Second),
-		)
+		user, err := v.VerifyIDToken(token)
 		if err != nil {
 			v.log.Error("token validation failed", "error", err.Error())
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "invalid token: " + err.Error(),
-			})
-		}
-		if !parsed.Valid {
-			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
-				"error": "token is not valid",
+				"error": "invalid token",
 			})
 		}
 
-		user := IntrospectUser{
-			Sub:   claims.Subject,
-			Email: claims.Email,
-			Name:  claims.Name,
-		}
-		c.Locals("user", user)
+		c.Locals("user", *user)
 		return c.Next()
 	}
+}
+
+// VerifyIDToken validates a raw JWT ID token string and returns the user claims.
+func (v *Verifier) VerifyIDToken(rawToken string) (*IntrospectUser, error) {
+	claims := &customClaims{}
+	parsed, err := jwt.ParseWithClaims(rawToken, claims, v.jwks.Keyfunc,
+		jwt.WithIssuer(v.iss),
+		jwt.WithValidMethods([]string{"RS256", "RS384", "RS512"}),
+		jwt.WithLeeway(30*time.Second),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("parse token: %w", err)
+	}
+	if !parsed.Valid {
+		return nil, fmt.Errorf("token is not valid")
+	}
+	return &IntrospectUser{
+		Sub:   claims.Subject,
+		Email: claims.Email,
+		Name:  claims.Name,
+	}, nil
 }
 
 // Optional is like Middleware but does not reject unauthenticated requests.

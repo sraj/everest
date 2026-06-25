@@ -77,7 +77,7 @@ func Load() (*Config, error) {
 		AppName:        l.String("APP_NAME", "everest"),
 		Port:           l.String("PORT", "8080"),
 		LogLevel:       l.String("LOG_LEVEL", "info"),
-		CORSOrigins:    l.String("CORS_ORIGINS", "*"),
+		CORSOrigins:    l.String("CORS_ORIGINS", "http://localhost:5173"),
 		DatabaseURL:    l.String("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/everest?sslmode=disable"),
 		MinIOEndpoint:  l.String("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey: l.String("MINIO_ACCESS_KEY", "minioadmin"),

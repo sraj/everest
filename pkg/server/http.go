@@ -44,6 +44,7 @@ func NewHTTP(cfg HTTPConfig, routes RouteRegistrar, log *slog.Logger) Server {
 	app := fiber.New(fiber.Config{
 		AppName:      cfg.AppName,
 		ErrorHandler: cfg.ErrorHandler,
+		BodyLimit:    32 * 1024 * 1024, // 32MB
 	})
 
 	app.Use(recover.New())

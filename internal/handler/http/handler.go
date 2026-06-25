@@ -256,7 +256,7 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 		return apperror.Internal("failed to get document content")
 	}
 
-	c.Set("Content-Disposition", "attachment; filename=\""+doc.Title+".html\"")
+	c.Set("Content-Disposition", "attachment; filename=\""+sanitizeFilename(doc.Title)+".html\"")
 	c.Set("Content-Type", "text/html")
 	return c.Send(content)
 }
@@ -332,4 +332,18 @@ func (h *Handler) serveOpenAPI(c *fiber.Ctx) error {
 		return apperror.NotFound("openapi spec not found — run: make proto")
 	}
 	return nil
+}
+
+func sanitizeFilename(name string) string {
+	if name == "" {
+		return "Untitled Document"
+	}
+	result := make([]byte, 0, len(name))
+	for _, b := range []byte(name) {
+		if b == '\r' || b == '\n' || b == '"' {
+			continue
+		}
+		result = append(result, b)
+	}
+	return string(result)
 }
