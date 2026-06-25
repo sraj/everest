@@ -14,7 +14,7 @@ internal/                     # Private application code (not importable externa
   config/                     #   Environment-based configuration
   store/                      #   Data access interfaces (Store, DocumentStore, ContentStore)
   domain/model/               #   Domain entities + value objects (Document, User, Page, PageResult)
-  infrastructure/             #   Infrastructure implementations
+  datastore/                  #   Data store implementations
     postgres/                 #     PostgreSQL-backed stores
     minio/                    #     MinIO-backed content stores
     zitadel/                  #     Zitadel auth integration (zitadel_authentication branch only)
