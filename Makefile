@@ -80,6 +80,11 @@ docker-infra:
 	@echo "Starting infrastructure services (PostgreSQL, MinIO)..."
 	@docker compose up -d --build postgres minio
 
+# Start Zitadel auth services only
+docker-zitadel:
+	@echo "Starting Zitadel services..."
+	@docker compose --profile zitadel up -d --build zitadel-postgres zitadel-proxy zitadel-api zitadel-login zitadel zitadel-bootstrap
+
 # Stop docker services
 docker-down:
 	@echo "Stopping Docker services..."
@@ -174,7 +179,10 @@ help:
 	@echo "  make proto           - Generate protobuf stubs + OpenAPI spec"
 	@echo ""
 	@echo "Database:"
-	@echo "  make docker-up       - Start Docker services (PostgreSQL, MinIO)"
+	@echo "  make docker-up       - Start all services (full stack + Zitadel)"
+	@echo "  make docker-core     - Start core services (no Zitadel)"
+	@echo "  make docker-infra    - Start infrastructure only (PostgreSQL, MinIO)"
+	@echo "  make docker-zitadel  - Start Zitadel auth services only"
 	@echo "  make docker-down     - Stop Docker services"
 	@echo "  make migrate-up      - Apply all pending migrations"
 	@echo "  make migrate-down    - Roll back all migrations"
