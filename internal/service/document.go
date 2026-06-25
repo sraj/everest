@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/store"
 )
+
+var htmlPolicy = bluemonday.UGCPolicy()
 
 // DocumentService defines the interface for document business logic.
 type DocumentService interface {
@@ -52,12 +55,13 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	contentID := uuid.New().String()
 	now := time.Now()
 
-	// Save content to MinIO
+	// Sanitize and save content to MinIO.
 	contentType := input.ContentType
 	if contentType == "" {
 		contentType = "text/html"
 	}
-	if err := s.store.Content().Save(ctx, contentID, input.Content, contentType); err != nil {
+	sanitized := htmlPolicy.SanitizeBytes(input.Content)
+	if err := s.store.Content().Save(ctx, contentID, sanitized, contentType); err != nil {
 		s.log.Error("failed to save document content", "error", err.Error())
 		return nil, err
 	}
@@ -130,7 +134,8 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput,
 
 	// Update content in MinIO
 	if input.Content != nil {
-		if err := s.store.Content().Save(ctx, doc.ContentID, input.Content, "text/html"); err != nil {
+		sanitized := htmlPolicy.SanitizeBytes(input.Content)
+		if err := s.store.Content().Save(ctx, doc.ContentID, sanitized, "text/html"); err != nil {
 			s.log.Error("failed to update document content", "error", err.Error())
 			return nil, err
 		}
