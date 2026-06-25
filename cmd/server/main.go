@@ -81,7 +81,8 @@ func main() {
 	}
 
 	docStore := postgres.NewDocumentStore(db)
-	st := store.New(docStore, contentStore, db.Close, db.Ping)
+	profileStore := postgres.NewUserProfileStore(db)
+	st := store.New(docStore, contentStore, profileStore, db.Close, db.Ping)
 
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), log)
 	defer thumbnailSvc.Close()
