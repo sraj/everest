@@ -1,4 +1,4 @@
-package zitadel
+package auth
 
 import (
 	"context"

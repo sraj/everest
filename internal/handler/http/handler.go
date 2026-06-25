@@ -8,7 +8,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/internal/datastore/zitadel"
+	"github.com/sraj/everest/internal/auth"
 	"github.com/sraj/everest/internal/service"
 	"github.com/sraj/everest/internal/version"
 )
@@ -123,7 +123,7 @@ func (h *Handler) handleVerify(c *fiber.Ctx) error {
 }
 
 func (h *Handler) handleMe(c *fiber.Ctx) error {
-	user, ok := c.Locals("user").(zitadel.IntrospectUser)
+	user, ok := c.Locals("user").(auth.IntrospectUser)
 	if !ok {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error": "not authenticated",
@@ -137,7 +137,7 @@ func (h *Handler) handleMe(c *fiber.Ctx) error {
 }
 
 func (h *Handler) ownerFromContext(c *fiber.Ctx) string {
-	if user, ok := c.Locals("user").(zitadel.IntrospectUser); ok {
+	if user, ok := c.Locals("user").(auth.IntrospectUser); ok {
 		return user.Sub
 	}
 	return "00000000-0000-0000-0000-000000000001"
