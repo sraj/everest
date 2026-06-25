@@ -11,6 +11,7 @@ type DocumentStore interface {
 	Create(ctx context.Context, doc *model.Document) error
 	GetByID(ctx context.Context, id string) (*model.Document, error)
 	GetByOwnerID(ctx context.Context, ownerID string) ([]*model.Document, error)
+	ListByOwner(ctx context.Context, ownerID string, page model.Page) (*model.PageResult, error)
 	Update(ctx context.Context, doc *model.Document) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, page model.Page) (*model.PageResult, error)

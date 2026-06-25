@@ -12,15 +12,15 @@ import (
 	"github.com/sraj/everest/internal/store"
 )
 
-// DocumentService defines the interface for document business logic
+// DocumentService defines the interface for document business logic.
 type DocumentService interface {
 	Create(ctx context.Context, input CreateDocumentInput) (*model.Document, error)
-	GetByID(ctx context.Context, id string) (*model.Document, error)
-	GetContent(ctx context.Context, id string) ([]byte, error)
-	Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error)
-	Delete(ctx context.Context, id string) error
-	List(ctx context.Context, page model.Page) (*model.PageResult, error)
-	GetThumbnail(ctx context.Context, id string) ([]byte, error)
+	GetByID(ctx context.Context, id, ownerID string) (*model.Document, error)
+	GetContent(ctx context.Context, id, ownerID string) ([]byte, error)
+	Update(ctx context.Context, input UpdateDocumentInput, ownerID string) (*model.Document, error)
+	Delete(ctx context.Context, id, ownerID string) error
+	List(ctx context.Context, page model.Page, ownerID string) (*model.PageResult, error)
+	GetThumbnail(ctx context.Context, id, ownerID string) ([]byte, error)
 }
 
 type documentService struct {
@@ -86,20 +86,26 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	return doc, nil
 }
 
-// GetByID retrieves a document by ID
-func (s *documentService) GetByID(ctx context.Context, id string) (*model.Document, error) {
+// GetByID retrieves a document by ID, verifying ownership.
+func (s *documentService) GetByID(ctx context.Context, id, ownerID string) (*model.Document, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
 	}
+	if doc.OwnerID != ownerID {
+		return nil, apperror.Forbidden("document %s not accessible", id)
+	}
 	return doc, nil
 }
 
-// GetContent retrieves document content
-func (s *documentService) GetContent(ctx context.Context, id string) ([]byte, error) {
+// GetContent retrieves document content, verifying ownership.
+func (s *documentService) GetContent(ctx context.Context, id, ownerID string) ([]byte, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
+	}
+	if doc.OwnerID != ownerID {
+		return nil, apperror.Forbidden("document %s not accessible", id)
 	}
 
 	return s.store.Content().Get(ctx, doc.ContentID)
@@ -112,11 +118,14 @@ type UpdateDocumentInput struct {
 	Content []byte
 }
 
-// Update updates an existing document
-func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error) {
+// Update updates an existing document, verifying ownership.
+func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput, ownerID string) (*model.Document, error) {
 	doc, err := s.store.Document().GetByID(ctx, input.ID)
 	if err != nil {
 		return nil, s.translateError(err, input.ID)
+	}
+	if doc.OwnerID != ownerID {
+		return nil, apperror.Forbidden("document %s not accessible", input.ID)
 	}
 
 	// Update content in MinIO
@@ -145,11 +154,14 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 	return doc, nil
 }
 
-// Delete deletes a document
-func (s *documentService) Delete(ctx context.Context, id string) error {
+// Delete deletes a document, verifying ownership.
+func (s *documentService) Delete(ctx context.Context, id, ownerID string) error {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return s.translateError(err, id)
+	}
+	if doc.OwnerID != ownerID {
+		return apperror.Forbidden("document %s not accessible", id)
 	}
 
 	// Delete content from MinIO
@@ -172,16 +184,19 @@ func (s *documentService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// List lists documents with pagination
-func (s *documentService) List(ctx context.Context, page model.Page) (*model.PageResult, error) {
-	return s.store.Document().List(ctx, page)
+// List lists documents with pagination, filtered by owner.
+func (s *documentService) List(ctx context.Context, page model.Page, ownerID string) (*model.PageResult, error) {
+	return s.store.Document().ListByOwner(ctx, ownerID, page)
 }
 
-// GetThumbnail retrieves document thumbnail
-func (s *documentService) GetThumbnail(ctx context.Context, id string) ([]byte, error) {
+// GetThumbnail retrieves document thumbnail, verifying ownership.
+func (s *documentService) GetThumbnail(ctx context.Context, id, ownerID string) ([]byte, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
+	}
+	if doc.OwnerID != ownerID {
+		return nil, apperror.Forbidden("document %s not accessible", id)
 	}
 
 	if doc.ThumbnailID == nil || *doc.ThumbnailID == "" {

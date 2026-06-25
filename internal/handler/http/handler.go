@@ -164,7 +164,9 @@ func (h *Handler) listDocuments(c *fiber.Ctx) error {
 		p = model.DefaultPage()
 	}
 
-	result, err := h.docService.List(c.Context(), p)
+	ownerID := h.ownerFromContext(c)
+
+	result, err := h.docService.List(c.Context(), p, ownerID)
 	if err != nil {
 		h.log.Error("failed to list documents", "error", err.Error())
 		return apperror.Internal("failed to list documents")
@@ -225,13 +227,14 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 
 func (h *Handler) getDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
+	ownerID := h.ownerFromContext(c)
 
-	doc, err := h.docService.GetByID(c.Context(), id)
+	doc, err := h.docService.GetByID(c.Context(), id, ownerID)
 	if err != nil {
 		return apperror.NotFound("document %s not found", id)
 	}
 
-	content, err := h.docService.GetContent(c.Context(), id)
+	content, err := h.docService.GetContent(c.Context(), id, ownerID)
 	if err != nil {
 		h.log.Error("failed to get document content", "error", err.Error())
 		content = []byte{}
@@ -244,13 +247,14 @@ func (h *Handler) getDocument(c *fiber.Ctx) error {
 
 func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
+	ownerID := h.ownerFromContext(c)
 
-	doc, err := h.docService.GetByID(c.Context(), id)
+	doc, err := h.docService.GetByID(c.Context(), id, ownerID)
 	if err != nil {
 		return apperror.NotFound("document %s not found", id)
 	}
 
-	content, err := h.docService.GetContent(c.Context(), id)
+	content, err := h.docService.GetContent(c.Context(), id, ownerID)
 	if err != nil {
 		h.log.Error("failed to get document content", "error", err.Error())
 		return apperror.Internal("failed to get document content")
@@ -263,8 +267,9 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 
 func (h *Handler) getDocumentThumbnail(c *fiber.Ctx) error {
 	id := c.Params("id")
+	ownerID := h.ownerFromContext(c)
 
-	thumbnail, err := h.docService.GetThumbnail(c.Context(), id)
+	thumbnail, err := h.docService.GetThumbnail(c.Context(), id, ownerID)
 	if err != nil {
 		return apperror.NotFound("document %s not found", id)
 	}
@@ -306,7 +311,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 		ID:      id,
 		Title:   title,
 		Content: content,
-	})
+	}, h.ownerFromContext(c))
 	if err != nil {
 		h.log.Error("failed to update document", "error", err.Error())
 		return apperror.Internal("failed to update document")
@@ -318,7 +323,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 func (h *Handler) deleteDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 
-	if err := h.docService.Delete(c.Context(), id); err != nil {
+	if err := h.docService.Delete(c.Context(), id, h.ownerFromContext(c)); err != nil {
 		h.log.Error("failed to delete document", "error", err.Error())
 		return apperror.Internal("failed to delete document")
 	}
