@@ -88,19 +88,30 @@ func main() {
 	docService := service.NewDocumentService(st, thumbnailSvc, log)
 
 	var authMiddleware fiber.Handler
+	var bffHandler *auth.BFFHandler
 	if cfg.ZitadelClientID != "" && cfg.ZitadelClientID != "<created-in-zitadel-console>" {
-		verifier, err := auth.NewVerifier(cfg.ZitadelIssuer, log)
+		bffHandler, err = auth.NewBFFHandler(auth.BFFConfig{
+			Issuer:        cfg.ZitadelIssuer,
+			ClientID:      cfg.ZitadelClientID,
+			RedirectURI:   "http://localhost:8080/auth/callback",
+			PostLogoutURI: "http://localhost:5173",
+			SessionSecret: cfg.ZitadelSessionSecret,
+			Log:           log,
+		})
 		if err != nil {
-			log.Error("Zitadel verifier initialization failed, continuing without auth", "error", err)
+			log.Error("BFF auth initialization failed, continuing without auth", "error", err)
 		} else {
-			authMiddleware = verifier.Middleware()
-			log.Info("Zitadel authentication enabled", "issuer", cfg.ZitadelIssuer)
+			authMiddleware = bffHandler.BFFMiddleware()
+			log.Info("BFF authentication enabled", "issuer", cfg.ZitadelIssuer)
 		}
 	} else {
 		log.Info("Zitadel authentication disabled (no ZITADEL_CLIENT_ID configured)")
 	}
 
 	httpHandler := handlerhttp.New(docService, log, authMiddleware)
+	if bffHandler != nil {
+		httpHandler.SetBFFHandler(bffHandler)
+	}
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
 		return db.Ping(ctx)
 	})

@@ -24,8 +24,9 @@ type Config struct {
 	MinIOUseSSL    bool
 	GRPCPort       string
 
-	ZitadelIssuer   string
-	ZitadelClientID string
+	ZitadelIssuer       string
+	ZitadelClientID     string
+	ZitadelSessionSecret string
 }
 
 var validLogLevels = map[string]bool{
@@ -82,8 +83,9 @@ func Load() (*Config, error) {
 		MinIOBucket:    l.String("MINIO_BUCKET", "documents"),
 		MinIOUseSSL:    l.Bool("MINIO_USE_SSL", false),
 		GRPCPort:       l.String("GRPC_PORT", ""),
-		ZitadelIssuer:  l.String("ZITADEL_ISSUER", ""),
-		ZitadelClientID: l.String("ZITADEL_CLIENT_ID", ""),
+		ZitadelIssuer:        l.String("ZITADEL_ISSUER", ""),
+		ZitadelClientID:      l.String("ZITADEL_CLIENT_ID", ""),
+		ZitadelSessionSecret: l.String("ZITADEL_SESSION_SECRET", ""),
 	}
 
 	if err := cfg.Validate(); err != nil {

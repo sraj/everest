@@ -20,6 +20,7 @@ type Handler struct {
 	log            *slog.Logger
 	healthChecks   map[string]HealthCheck
 	authMiddleware fiber.Handler
+	bffHandler     *auth.BFFHandler
 }
 
 func New(docService service.DocumentService, log *slog.Logger, authMiddleware ...fiber.Handler) *Handler {
@@ -34,6 +35,10 @@ func New(docService service.DocumentService, log *slog.Logger, authMiddleware ..
 	return h
 }
 
+func (h *Handler) SetBFFHandler(bff *auth.BFFHandler) {
+	h.bffHandler = bff
+}
+
 func (h *Handler) AddHealthCheck(name string, check HealthCheck) {
 	h.healthChecks[name] = check
 }
@@ -42,8 +47,13 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	app.Get("/health", h.healthCheck)
 	app.Get("/api/docs/openapi.json", h.serveOpenAPI)
 
-	// OIDC Auth routes
-	if h.authMiddleware != nil {
+	// BFF OIDC routes (server-side auth)
+	if h.bffHandler != nil {
+		h.bffHandler.RegisterRoutes(app)
+	}
+
+	// Legacy Bearer token auth routes
+	if h.authMiddleware != nil && h.bffHandler == nil {
 		auth := app.Group("/auth")
 		auth.Post("/verify", h.authMiddleware, h.handleVerify)
 		auth.Get("/me", h.authMiddleware, h.handleMe)

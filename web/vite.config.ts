@@ -10,15 +10,10 @@ export default defineConfig({
     host: true, // Allow external connections (needed for Docker)
     proxy: {
       '/api': {
-        // Use backend service name in Docker, localhost otherwise
         target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
       },
-      '/auth/verify': {
-        target: process.env.VITE_API_URL || 'http://localhost:8080',
-        changeOrigin: true,
-      },
-      '/auth/me': {
+      '/auth': {
         target: process.env.VITE_API_URL || 'http://localhost:8080',
         changeOrigin: true,
       },
