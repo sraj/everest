@@ -93,8 +93,8 @@ func main() {
 		bffHandler, err = auth.NewBFFHandler(auth.BFFConfig{
 			Issuer:        cfg.ZitadelIssuer,
 			ClientID:      cfg.ZitadelClientID,
-			RedirectURI:   "http://localhost:8080/auth/callback",
-			PostLogoutURI: "http://localhost:5173",
+			RedirectURI:   cfg.ZitadelRedirectURI,
+			PostLogoutURI: cfg.ZitadelPostLogoutURI,
 			SessionSecret: cfg.ZitadelSessionSecret,
 			Log:           log,
 		})

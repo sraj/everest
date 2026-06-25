@@ -24,8 +24,10 @@ type Config struct {
 	MinIOUseSSL    bool
 	GRPCPort       string
 
-	ZitadelIssuer       string
-	ZitadelClientID     string
+	ZitadelIssuer        string
+	ZitadelClientID      string
+	ZitadelRedirectURI   string
+	ZitadelPostLogoutURI string
 	ZitadelSessionSecret string
 }
 
@@ -85,6 +87,8 @@ func Load() (*Config, error) {
 		GRPCPort:       l.String("GRPC_PORT", ""),
 		ZitadelIssuer:        l.String("ZITADEL_ISSUER", ""),
 		ZitadelClientID:      l.String("ZITADEL_CLIENT_ID", ""),
+		ZitadelRedirectURI:   l.String("ZITADEL_REDIRECT_URI", "http://localhost:8080/auth/callback"),
+		ZitadelPostLogoutURI: l.String("ZITADEL_POST_LOGOUT_URI", "http://localhost:5173"),
 		ZitadelSessionSecret: l.String("ZITADEL_SESSION_SECRET", ""),
 	}
 
