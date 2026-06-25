@@ -106,6 +106,9 @@ var securityHeaders = func(c *fiber.Ctx) error {
 	c.Set("X-Frame-Options", "DENY")
 	c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'")
+	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'")
+	if c.Protocol() == "https" {
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+	}
 	return c.Next()
 }

@@ -315,6 +315,17 @@ func (h *BFFHandler) handleCallback(c *fiber.Ctx) error {
 func (h *BFFHandler) handleLogout(c *fiber.Ctx) error {
 	h.cookie.clear(c)
 	h.cookie.clearPKCE(c)
+
+	// Also logout from Zitadel IDP (RP-Initiated Logout).
+	if h.endpoints.endSession != "" {
+		logoutURL, _ := url.Parse(h.endpoints.endSession)
+		q := logoutURL.Query()
+		q.Set("client_id", h.cfg.ClientID)
+		q.Set("post_logout_redirect_uri", h.cfg.PostLogoutURI)
+		logoutURL.RawQuery = q.Encode()
+		return c.Redirect(logoutURL.String(), http.StatusFound)
+	}
+
 	return c.Redirect(h.cfg.PostLogoutURI, http.StatusFound)
 }
 
@@ -325,6 +336,8 @@ func (h *BFFHandler) handleMe(c *fiber.Ctx) error {
 			"error": "not authenticated",
 		})
 	}
+	// Extend session on activity (sliding expiry).
+	h.cookie.set(c, user)
 	return c.JSON(user)
 }
 
