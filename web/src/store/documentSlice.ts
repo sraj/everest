@@ -26,12 +26,8 @@ const initialState: DocumentState = {
 
 export const fetchDocuments = createAsyncThunk(
   'documents/fetchDocuments',
-  async (accessToken?: string) => {
-    const headers: Record<string, string> = {}
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`
-    }
-    const response = await fetch('/api/v1/documents', { headers })
+  async () => {
+    const response = await fetch('/api/v1/documents')
     if (!response.ok) {
       throw new Error('Failed to fetch documents')
     }
@@ -51,15 +47,8 @@ export const fetchDocument = createAsyncThunk(
 
 export const deleteDocument = createAsyncThunk(
   'documents/deleteDocument',
-  async ({ id, accessToken }: { id: string; accessToken?: string }) => {
-    const headers: Record<string, string> = {}
-    if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`
-    }
-    const response = await fetch(`/api/v1/documents/${id}`, {
-      method: 'DELETE',
-      headers,
-    })
+  async (id: string) => {
+    const response = await fetch(`/api/v1/documents/${id}`, { method: 'DELETE' })
     if (!response.ok) {
       throw new Error('Failed to delete document')
     }

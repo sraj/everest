@@ -8,7 +8,7 @@ export function Home() {
   const dispatch = useAppDispatch()
   const { documents, loading, error } = useAppSelector((state) => state.documents)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const { isAuthenticated, getAccessToken, logout, login, isLoading } = useAuth()
+  const { isAuthenticated, logout, login, isLoading } = useAuth()
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -18,9 +18,9 @@ export function Home() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      dispatch(fetchDocuments(getAccessToken()))
+      dispatch(fetchDocuments())
     }
-  }, [dispatch, isAuthenticated, getAccessToken])
+  }, [dispatch, isAuthenticated])
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.preventDefault()
@@ -29,7 +29,7 @@ export function Home() {
     if (confirm('Are you sure you want to delete this document?')) {
       setDeletingId(id)
       try {
-        await dispatch(deleteDocument({ id, accessToken: getAccessToken() })).unwrap()
+        await dispatch(deleteDocument(id)).unwrap()
       } finally {
         setDeletingId(null)
       }
@@ -80,7 +80,6 @@ export function Home() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Recent Documents Section */}
         <div className="mb-6">
           <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Recent Documents</h2>
         </div>
@@ -124,7 +123,6 @@ export function Home() {
               to={`/documents/${doc.id}`}
               className="group block bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-lg transition-all"
             >
-              {/* Document Preview */}
               <div className="aspect-[3/4] bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 overflow-hidden relative">
                 {doc.thumbnail_url ? (
                   <img
@@ -141,7 +139,6 @@ export function Home() {
                 )}
               </div>
 
-              {/* Document Info */}
               <div className="p-4">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-medium text-gray-900 dark:text-white truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">

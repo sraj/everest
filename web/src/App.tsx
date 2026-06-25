@@ -14,7 +14,6 @@ function App() {
           <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/auth/callback" element={<Home />} />
               <Route path="/documents/:id" element={<DocumentEditor />} />
             </Routes>
           </div>

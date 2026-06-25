@@ -52,6 +52,7 @@ func (s *sessionCookie) set(c *fiber.Ctx, value any) error {
 	c.Cookie(&fiber.Cookie{
 		Name:     cookieName,
 		Value:    encoded,
+		Domain:   cookieDomain(c),
 		Path:     "/",
 		Expires:  time.Now().Add(cookieMaxAge),
 		HTTPOnly: true,
@@ -119,6 +120,17 @@ func (s *sessionCookie) clearPKCE(c *fiber.Ctx) {
 
 func isSecure(c *fiber.Ctx) bool {
 	return strings.HasPrefix(c.Protocol(), "https")
+}
+
+// cookieDomain returns the domain for cookies so they are shared across
+// ports on localhost. In production (non-localhost), it returns empty
+// (scope to the exact host, which is the right choice behind a proxy).
+func cookieDomain(c *fiber.Ctx) string {
+	host := c.Hostname()
+	if host == "localhost" || host == "127.0.0.1" {
+		return "localhost"
+	}
+	return ""
 }
 
 // ── OIDC BFF Handler ───────────────────────────────────────────

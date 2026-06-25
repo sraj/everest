@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthProvider'
 export function DocumentEditor() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAuthenticated, isLoading, login, getAccessToken } = useAuth()
+  const { isAuthenticated, isLoading, login } = useAuth()
   const isNew = id === 'new'
 
   const [title, setTitle] = useState('')
@@ -15,7 +15,6 @@ export function DocumentEditor() {
   const [loading, setLoading] = useState(!isNew)
   const [lastSaved, setLastSaved] = useState<Date | null>(null)
 
-  // Redirect unauthenticated users to login
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       login()
@@ -30,14 +29,10 @@ export function DocumentEditor() {
     )
   }
 
-  // Load existing document
   useEffect(() => {
     if (!isNew && id && isAuthenticated) {
       setLoading(true)
-      const token = getAccessToken()
-      const headers: Record<string, string> = {}
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      fetch(`/api/v1/documents/${id}`, { headers })
+      fetch(`/api/v1/documents/${id}`)
         .then((res) => {
           if (!res.ok) throw new Error('Failed to load document')
           return res.json()
@@ -52,22 +47,17 @@ export function DocumentEditor() {
         })
         .finally(() => setLoading(false))
     }
-  }, [id, isNew, isAuthenticated, getAccessToken, navigate])
+  }, [id, isNew, isAuthenticated, navigate])
 
   const handleSave = async () => {
     setSaving(true)
     try {
       const url = isNew ? '/api/v1/documents' : `/api/v1/documents/${id}`
       const method = isNew ? 'POST' : 'PUT'
-      const token = getAccessToken()
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      if (token) headers['Authorization'] = `Bearer ${token}`
 
       const response = await fetch(url, {
         method,
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: title || 'Untitled Document', content }),
       })
 
@@ -98,7 +88,6 @@ export function DocumentEditor() {
 
   return (
     <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
-      {/* Header */}
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
@@ -152,7 +141,6 @@ export function DocumentEditor() {
         </div>
       </header>
 
-      {/* Editor */}
       <div className="flex-1 overflow-hidden">
         <Editor key={id} content={content} onChange={setContent} />
       </div>

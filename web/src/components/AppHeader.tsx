@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
 import { EverstLogo, PlusIcon } from './icons'
-import type { User } from 'oidc-client-ts'
+
+export interface AppHeaderUser {
+  name?: string
+  email?: string
+}
 
 type AppHeaderProps = {
-  user: User | null
+  user: AppHeaderUser | null
   onLogout: () => void
 }
 
@@ -18,7 +22,7 @@ export function AppHeader({ user, onLogout }: AppHeaderProps) {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-gray-600 dark:text-gray-300 hidden sm:block">
-              {user?.profile?.name || user?.profile?.email || 'User'}
+              {user?.name || user?.email || 'User'}
             </span>
             <Link
               to="/documents/new"
