@@ -53,6 +53,7 @@ func NewHTTP(cfg HTTPConfig, routes RouteRegistrar, log *slog.Logger) Server {
 		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-User-ID, X-User-Roles",
 		AllowMethods: "GET, POST, PUT, DELETE, PATCH, OPTIONS",
 	}))
+	app.Use(securityHeaders)
 	app.Use(logger.Middleware(log))
 
 	if cfg.RateLimitMax > 0 {
@@ -97,4 +98,13 @@ func (s *HTTPServer) Shutdown(_ context.Context) error {
 // Name returns the server name.
 func (s *HTTPServer) Name() string {
 	return "http"
+}
+
+var securityHeaders = func(c *fiber.Ctx) error {
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("X-Frame-Options", "DENY")
+	c.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+	c.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+	c.Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'")
+	return c.Next()
 }
