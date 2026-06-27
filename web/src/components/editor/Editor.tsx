@@ -3,6 +3,7 @@ import { useRef, useEffect, useState } from 'react'
 import { createExtensions } from './extensions'
 import type { PageSizeKey } from './extensions'
 import { Toolbar } from './toolbar/Toolbar'
+import { ContextMenu } from './ContextMenu'
 import './editor.css'
 
 interface EditorProps {
@@ -46,6 +47,7 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
         <span>{editor.storage.characterCount?.characters?.() ?? 0} characters</span>
         <span>{editor.storage.characterCount?.words?.() ?? 0} words</span>
       </div>
+      <ContextMenu editor={editor} />
     </div>
   )
 }
