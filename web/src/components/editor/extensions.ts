@@ -16,6 +16,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { CharacterCount } from '@tiptap/extension-character-count'
+import { Mathematics } from '@tiptap/extension-mathematics'
 import { PaginationPlus, PAGE_SIZES } from 'tiptap-pagination-plus'
 import type { PageSize } from 'tiptap-pagination-plus'
 export { PAGE_SIZES } from 'tiptap-pagination-plus'
@@ -118,6 +119,7 @@ export function createExtensions(pageSize: PageSizeKey) {
     TableCell,
     TableHeader,
     CharacterCount,
+    Mathematics,
     PaginationPlus.configure({
       pageGap: 24,
       contentMarginTop: 0,
