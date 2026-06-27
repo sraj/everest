@@ -25,7 +25,7 @@ type TaggerConfig struct {
 // DefaultTaggerConfig returns sensible defaults.
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
-		Model:   "openai/gpt-4o-mini",
+		Model:   "openrouter/openai/gpt-4o-mini",
 		Enabled: false,
 	}
 }
@@ -158,6 +158,8 @@ func parseModel(modelArg string) (schemas.ModelProvider, string) {
 		return schemas.Anthropic, parts[1]
 	case "ollama":
 		return schemas.Ollama, parts[1]
+	case "openrouter":
+		return schemas.OpenRouter, parts[1]
 	case "google", "vertex":
 		return schemas.GoogleVertexAI, parts[1]
 	case "groq":
@@ -178,6 +180,9 @@ func (a *tagAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
 	if os.Getenv("ANTHROPIC_API_KEY") != "" {
 		providers = append(providers, schemas.Anthropic)
 	}
+	if os.Getenv("OPENROUTER_API_KEY") != "" {
+		providers = append(providers, schemas.OpenRouter)
+	}
 	return providers, nil
 }
 
@@ -188,6 +193,8 @@ func (a *tagAccount) GetKeysForProvider(_ *context.Context, provider schemas.Mod
 		key = os.Getenv("OPENAI_API_KEY")
 	case schemas.Anthropic:
 		key = os.Getenv("ANTHROPIC_API_KEY")
+	case schemas.OpenRouter:
+		key = os.Getenv("OPENROUTER_API_KEY")
 	}
 	if key == "" {
 		return nil, fmt.Errorf("no API key for %s", provider)
