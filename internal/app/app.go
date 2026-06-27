@@ -101,7 +101,9 @@ func (a *App) Run() error {
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
 
-	docService := service.NewDocumentService(st, thumbnailSvc, a.log)
+	tagger := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
+
+	docService := service.NewDocumentService(st, thumbnailSvc, tagger, a.log)
 	profileService := service.NewProfileService(st, a.log)
 
 	httpHandler := handlerhttp.New(docService, a.log)

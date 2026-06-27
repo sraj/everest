@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lib/pq"
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/store"
 	"github.com/sraj/everest/pkg/dbx"
@@ -21,8 +22,8 @@ func NewDocumentStore(db *dbx.DB) store.DocumentStore {
 
 func (r *documentStore) Create(ctx context.Context, doc *model.Document) error {
 	_, err := r.db.Insert("documents").
-		Columns("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
-		Values(doc.ID, doc.Title, doc.OwnerID, doc.ContentID, nullString(doc.ThumbnailID), doc.CreatedAt, doc.UpdatedAt).
+		Columns("id", "title", "owner_id", "content_id", "thumbnail_id", "tags", "created_at", "updated_at").
+		Values(doc.ID, doc.Title, doc.OwnerID, doc.ContentID, nullString(doc.ThumbnailID), pq.Array(doc.Tags), doc.CreatedAt, doc.UpdatedAt).
 		Exec(ctx)
 	if err != nil {
 		if dbx.IsUniqueViolation(err) {
@@ -35,7 +36,7 @@ func (r *documentStore) Create(ctx context.Context, doc *model.Document) error {
 
 func (r *documentStore) GetByID(ctx context.Context, id string) (*model.Document, error) {
 	var doc model.Document
-	err := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
+	err := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "tags", "created_at", "updated_at").
 		From("documents").
 		Where(dbx.Cond.Eq("id", id)).
 		One(ctx, &doc)
@@ -50,7 +51,7 @@ func (r *documentStore) GetByID(ctx context.Context, id string) (*model.Document
 
 func (r *documentStore) GetByOwnerID(ctx context.Context, ownerID string) ([]*model.Document, error) {
 	var docs []*model.Document
-	err := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
+	err := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "tags", "created_at", "updated_at").
 		From("documents").
 		Where(dbx.Cond.Eq("owner_id", ownerID)).
 		OrderBy("updated_at", dbx.DESC).
@@ -102,7 +103,7 @@ func (r *documentStore) List(ctx context.Context, page model.Page) (*model.PageR
 	}
 
 	var docs []*model.Document
-	q := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "created_at", "updated_at").
+	q := r.db.Select("id", "title", "owner_id", "content_id", "thumbnail_id", "tags", "created_at", "updated_at").
 		From("documents").
 		OrderBy("updated_at", dbx.DESC).
 		Paginate(dbPage)

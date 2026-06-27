@@ -26,14 +26,16 @@ type DocumentService interface {
 type documentService struct {
 	store        store.Store
 	thumbnailSvc ThumbnailService
+	tagger       *tagger
 	log          *slog.Logger
 }
 
 // NewDocumentService creates a new document service.
-func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, log *slog.Logger) DocumentService {
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, tagger *tagger, log *slog.Logger) DocumentService {
 	return &documentService{
 		store:        st,
 		thumbnailSvc: thumbnailSvc,
+		tagger:       tagger,
 		log:          log,
 	}
 }
@@ -83,6 +85,11 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
 	}
 
+	// Generate tags asynchronously
+	if s.tagger != nil {
+		go s.tagger.GenerateAndSaveTags(context.Background(), doc.ID, input.Content)
+	}
+
 	return doc, nil
 }
 
@@ -129,6 +136,11 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 		// Regenerate thumbnail asynchronously when content changes
 		if s.thumbnailSvc != nil && len(input.Content) > 0 {
 			go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
+		}
+
+		// Regenerate tags when content changes
+		if s.tagger != nil {
+			go s.tagger.GenerateAndSaveTags(context.Background(), doc.ID, input.Content)
 		}
 	}
 
