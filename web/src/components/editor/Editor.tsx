@@ -12,20 +12,20 @@ interface EditorProps {
   editable?: boolean
 }
 
-function ShadowContainer({ children }: { children: React.ReactNode }) {
+function ShadowContainer({ children, onReady }: { children: React.ReactNode; onReady?: () => void }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null)
+  const onReadyRef = useRef(onReady)
+  onReadyRef.current = onReady
 
   useEffect(() => {
     if (hostRef.current && !hostRef.current.shadowRoot) {
       const shadow = hostRef.current.attachShadow({ mode: 'open' })
 
       const sheets: CSSStyleSheet[] = []
-
       if (document.adoptedStyleSheets.length > 0) {
         sheets.push(...document.adoptedStyleSheets)
       }
-
       for (const styleSheet of document.styleSheets) {
         try {
           if (styleSheet.cssRules) {
@@ -37,12 +37,14 @@ function ShadowContainer({ children }: { children: React.ReactNode }) {
             sheets.push(newSheet)
           }
         } catch {
-          // Skip cross-origin stylesheets
         }
       }
-
       shadow.adoptedStyleSheets = sheets
       setShadowRoot(shadow)
+
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => onReadyRef.current?.())
+      })
     }
   }, [])
 
@@ -62,6 +64,7 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
   pageSize: PageSizeKey
   onPageSizeChange: (size: PageSizeKey) => void
 }) {
+  const [shadowReady, setShadowReady] = useState(false)
   const editor = useEditor({
     extensions: createExtensions(pageSize),
     content: content || '',
@@ -79,12 +82,30 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
     },
   })
 
+  useEffect(() => {
+    if (!editor) return
+    const el = editor.view.dom
+    const ro = new ResizeObserver(() => {
+      const view = editor.view as unknown as { requestMeasure?: () => void }
+      view.requestMeasure?.()
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor || !shadowReady) return
+    // Shadow DOM fully painted — force pagination to recalculate via content re-set.
+    const html = editor.getHTML()
+    editor.commands.setContent(html, false)
+  }, [shadowReady, editor])
+
   if (!editor) return null
 
   return (
     <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
-      <Toolbar editor={editor} pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
-      <ShadowContainer>
+      {shadowReady && <Toolbar editor={editor} pageSize={pageSize} onPageSizeChange={onPageSizeChange} />}
+      <ShadowContainer onReady={() => setShadowReady(true)}>
         <EditorContent editor={editor} className="h-full" />
       </ShadowContainer>
     </div>
