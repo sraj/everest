@@ -27,7 +27,7 @@ type TaggerConfig struct {
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
 		Endpoint: envOrDefault("AI_TAGGER_ENDPOINT", "http://localhost:8081/v1/chat/completions"),
-		Model:    envOrDefault("AI_TAGGER_MODEL", "opencode/gpt-5-nano"),
+		Model:    envOrDefault("AI_TAGGER_MODEL", "opencode/mimo-v2.5-free"),
 		Enabled:  strings.ToLower(os.Getenv("AI_TAGGER_ENABLED")) == "true",
 	}
 }
