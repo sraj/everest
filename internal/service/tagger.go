@@ -88,7 +88,7 @@ func (t *tagger) GenerateAndSaveTags(ctx context.Context, docID string, content 
 }
 
 func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
-	systemPrompt := `Extract 3-5 relevant tags from the document content. Return ONLY a valid JSON array of lowercase strings. Example: ["technology","programming","golang"]. No other text.`
+	systemPrompt := `Extract 3-5 relevant tags from the document content. Return a JSON object with a "tags" array. Example: {"tags":["technology","programming","golang"]}. No other text.`
 
 	reqBody := map[string]any{
 		"model": t.cfg.Model,
@@ -96,9 +96,10 @@ func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
 			{"role": "system", "content": systemPrompt},
 			{"role": "user", "content": "Document content:\n\n" + text},
 		},
-		"temperature": 0.3,
-		"max_tokens":  500,
-		"reasoning": map[string]any{"effort": "low"},
+		"temperature":     0.3,
+		"max_completion_tokens": 200,
+		"seed":             42,
+		"response_format":  map[string]string{"type": "json_object"},
 	}
 
 	body, err := json.Marshal(reqBody)
@@ -133,16 +134,16 @@ func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
 	}
 
 	raw := strings.TrimSpace(chatResp.Choices[0].Message.Content)
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-	raw = strings.TrimSpace(raw)
 
-	var tags model.Tags
-	if err := json.Unmarshal([]byte(raw), &tags); err != nil {
+	// With response_format: json_object, the output is a JSON object with a "tags" key.
+	var result struct {
+		Tags model.Tags `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(raw), &result); err != nil {
 		t.log.Error("failed to parse tags from AI", "raw", raw, "error", err.Error())
 		return nil, err
 	}
+	tags := result.Tags
 	if len(tags) > 5 {
 		tags = tags[:5]
 	}
