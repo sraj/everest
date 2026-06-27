@@ -2,9 +2,8 @@
 
 .tiptap-editor {
   @apply min-h-[500px] px-6 py-4 text-neutral-900 dark:text-neutral-100;
-  @apply focus:outline-none;
   @apply text-base leading-relaxed;
-  @apply m-auto bg-white mt-4;
+  @apply mx-auto bg-white mt-4;
 }
 
 .tiptap-editor:focus-visible {
