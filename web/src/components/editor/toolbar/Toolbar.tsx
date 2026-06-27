@@ -85,7 +85,6 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-
     const reader = new FileReader()
     reader.onload = (event) => {
       const url = event.target?.result as string
@@ -97,127 +96,118 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
 
   return (
     <>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleImageUpload}
-      />
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
-      <div className="border-b border-neutral-200 dark:border-neutral-800">
-        {/* Row 1 — History + Typography + Inline formatting */}
-        <div className="flex flex-wrap items-center gap-0.5 bg-neutral-50 px-2 py-1 dark:bg-neutral-900">
-          <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
-            <Undo />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)">
-            <Redo />
-          </ToolbarButton>
+      {/* Row 1 — History + Typography + Inline formatting + Insert */}
+      <div className="flex flex-wrap items-center gap-0.5 bg-neutral-50 px-2 py-1 dark:bg-neutral-900 border-b border-neutral-200/50 dark:border-neutral-800/50">
+        <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
+          <Undo />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()} title="Redo (Ctrl+Y)">
+          <Redo />
+        </ToolbarButton>
 
-          <ToolbarDivider />
+        <ToolbarDivider />
 
-          <FontFamilyDropdown editor={editor} />
-          <FontSizeDropdown editor={editor} />
-          <LineSpacingDropdown editor={editor} />
+        <FontFamilyDropdown editor={editor} />
+        <FontSizeDropdown editor={editor} />
+        <LineSpacingDropdown editor={editor} />
 
-          <ToolbarDivider />
+        <ToolbarDivider />
 
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold (Ctrl+B)">
-            <Bold />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic (Ctrl+I)">
-            <Italic />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')} title="Underline (Ctrl+U)">
-            <Underline />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')} title="Strikethrough">
-            <Strikethrough />
-          </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive('bold')} title="Bold (Ctrl+B)">
+          <Bold />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive('italic')} title="Italic (Ctrl+I)">
+          <Italic />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive('underline')} title="Underline (Ctrl+U)">
+          <Underline />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive('strike')} title="Strikethrough">
+          <Strikethrough />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive('superscript')} title="Superscript">
+          <SuperscriptIcon />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive('subscript')} title="Subscript">
+          <SubscriptIcon />
+        </ToolbarButton>
 
-          <ToolbarButton onClick={() => editor.chain().focus().toggleSuperscript().run()} active={editor.isActive('superscript')} title="Superscript">
-            <SuperscriptIcon />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleSubscript().run()} active={editor.isActive('subscript')} title="Subscript">
-            <SubscriptIcon />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <ToolbarDivider />
+        <ColorPopover editor={editor} />
+        <ToolbarButton onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} title="Clear formatting">
+          <ClearFormatting />
+        </ToolbarButton>
 
-          <ColorPopover editor={editor} />
-          <ToolbarButton onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} title="Clear formatting">
-            <ClearFormatting />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <div className="flex-1" />
+        <LinkPopover editor={editor} />
+        <EmojiPopover editor={editor} />
+        <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Insert image">
+          <ImageIcon />
+        </ToolbarButton>
 
-          <LinkPopover editor={editor} />
-          <EmojiPopover editor={editor} />
-          <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Insert image">
-            <ImageIcon />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <ToolbarDivider />
+        <PageSizePopover pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
+        <ToolbarButton onClick={handlePrint} title="Print">
+          <Printer />
+        </ToolbarButton>
+      </div>
 
-          <PageSizePopover pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
-          <ToolbarButton onClick={handlePrint} title="Print">
-            <Printer />
-          </ToolbarButton>
-        </div>
+      {/* Row 2 — Structure: Headings, Lists, Blocks, Alignment, Tables */}
+      <div className="flex flex-wrap items-center gap-0.5 bg-neutral-100 px-2 py-1 dark:bg-neutral-800">
+        <HeadingDropdown editor={editor} />
 
-        {/* Row 2 — Structure: Headings, Lists, Blocks, Indent, Alignment */}
-        <div className="flex flex-wrap items-center gap-0.5 bg-neutral-100 px-2 py-1 dark:bg-neutral-800">
-          <HeadingDropdown editor={editor} />
+        <ToolbarDivider />
 
-          <ToolbarDivider />
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet list">
+          <BulletList />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered list">
+          <OrderedList />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')} title="Task list">
+          <TaskList />
+        </ToolbarButton>
 
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive('bulletList')} title="Bullet list">
-            <BulletList />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive('orderedList')} title="Numbered list">
-            <OrderedList />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} active={editor.isActive('taskList')} title="Task list">
-            <TaskList />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <ToolbarDivider />
+        <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')} title="Blockquote">
+          <Blockquote />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')} title="Code block">
+          <Code />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
+          <HorizontalRule />
+        </ToolbarButton>
 
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive('blockquote')} title="Blockquote">
-            <Blockquote />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive('codeBlock')} title="Code block">
-            <Code />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
-            <HorizontalRule />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <ToolbarDivider />
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Align left">
+          <AlignLeft />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Align center">
+          <AlignCenter />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right">
+          <AlignRight />
+        </ToolbarButton>
 
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('left').run()} active={editor.isActive({ textAlign: 'left' })} title="Align left">
-            <AlignLeft />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('center').run()} active={editor.isActive({ textAlign: 'center' })} title="Align center">
-            <AlignCenter />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align right">
-            <AlignRight />
-          </ToolbarButton>
+        <ToolbarDivider />
 
-          <div className="flex-1" />
-
-          <ToolbarButton onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert table">
-            <TableIconComponent />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add column">
-            <AddColumnBefore />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().addRowBefore().run()} title="Add row">
-            <AddRowBefore />
-          </ToolbarButton>
-        </div>
+        <ToolbarButton onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert table (3×3)">
+          <TableIconComponent />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add column">
+          <AddColumnBefore />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().addRowBefore().run()} title="Add row">
+          <AddRowBefore />
+        </ToolbarButton>
       </div>
     </>
   )
