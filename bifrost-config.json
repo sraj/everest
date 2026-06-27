@@ -4,18 +4,28 @@
     "enabled": false
   },
   "providers": {
-    "openrouter": {
+    "opencode": {
       "keys": [
         {
-          "name": "openrouter-key-1",
+          "name": "opencode-key",
           "value": {
             "from_env": true,
-            "env_var": "OPENROUTER_API_KEY"
+            "env_var": "OPENCODE_GO_API_KEY"
           },
           "models": ["*"],
           "weight": 1.0
         }
-      ]
+      ],
+      "network_config": {
+        "base_url": "https://opencode.ai/zen/v1"
+      },
+      "custom_provider_config": {
+        "base_provider_type": "openai",
+        "allowed_requests": {
+          "chat_completion": true,
+          "chat_completion_stream": false
+        }
+      }
     }
   }
 }
