@@ -16,6 +16,7 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
   pageSize: PageSizeKey
   onPageSizeChange: (size: PageSizeKey) => void
 }) {
+  const [pageCount, setPageCount] = useState(1)
   const editor = useEditor({
     extensions: createExtensions(pageSize),
     content: content || '',
@@ -33,6 +34,16 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
     },
   })
 
+  useEffect(() => {
+    if (!editor) return
+    const observer = new MutationObserver(() => {
+      const breaks = editor.view.dom.querySelectorAll('.rm-page-break')
+      setPageCount(breaks.length || 1)
+    })
+    observer.observe(editor.view.dom, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [editor])
+
   if (!editor) return null
 
   return (
@@ -44,8 +55,9 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
         </div>
       </div>
       <div className="border-t border-neutral-200 dark:border-neutral-700 px-4 py-1.5 flex items-center gap-4 text-[11px] text-neutral-400 dark:text-neutral-500">
-        <span>{editor.storage.characterCount?.characters?.() ?? 0} characters</span>
         <span>{editor.storage.characterCount?.words?.() ?? 0} words</span>
+        <span>{editor.storage.characterCount?.characters?.() ?? 0} characters</span>
+        <span className="ml-auto">Page {pageCount}</span>
       </div>
       <ContextMenu editor={editor} />
     </div>
