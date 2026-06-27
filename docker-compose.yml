@@ -63,6 +63,8 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: documents
       MINIO_USE_SSL: "false"
+      AI_TAGGER_ENABLED: "true"
+      AI_TAGGER_MODEL: "openai/gpt-4o-mini"
     ports:
       - "8080:8080"
     depends_on:
@@ -94,6 +96,17 @@ services:
     depends_on:
       - backend
 
+  bifrost:
+    image: maximhq/bifrost:latest
+    container_name: everest-bifrost
+    ports:
+      - "8081:8080"
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - bifrost_data:/app/data
+
 volumes:
   postgres_data:
   minio_data:
+  bifrost_data:
