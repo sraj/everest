@@ -9,6 +9,7 @@ import { FontSizeDropdown } from './FontSizeDropdown'
 import { LineSpacingDropdown } from './LineSpacingDropdown'
 import { HeadingDropdown } from './HeadingDropdown'
 import { EmojiPopover } from './EmojiPopover'
+import { SymbolPopover } from './SymbolPopover'
 import { ALL_PAGE_SIZES } from '../extensions'
 import type { PageSizeKey } from '../extensions'
 import {
@@ -145,6 +146,7 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
 
         <LinkPopover editor={editor} />
         <EmojiPopover editor={editor} />
+        <SymbolPopover editor={editor} />
         <ToolbarButton onClick={() => fileInputRef.current?.click()} title="Insert image">
           <ImageIcon />
         </ToolbarButton>
