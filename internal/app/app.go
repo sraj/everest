@@ -101,10 +101,7 @@ func (a *App) Run() error {
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
 
-	tagger, err := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
-	if err != nil {
-		return fmt.Errorf("tagger: %w", err)
-	}
+	tagger := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
 	defer tagger.Close()
 
 	docService := service.NewDocumentService(st, thumbnailSvc, tagger, a.log)

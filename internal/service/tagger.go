@@ -1,16 +1,15 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
-	"os"
+	"net/http"
 	"strings"
 	"time"
-
-	bifrost "github.com/maximhq/bifrost/core"
-	"github.com/maximhq/bifrost/core/schemas"
 
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/store"
@@ -18,44 +17,34 @@ import (
 
 // TaggerConfig holds AI tag generation configuration.
 type TaggerConfig struct {
-	Model   string // "openai/gpt-4o-mini", "ollama/llama3.2", "anthropic/claude-haiku"
-	Enabled bool
+	Endpoint string // Bifrost gateway URL (http://localhost:8081/v1/chat/completions)
+	Model    string // "openrouter/nvidia/nemotron-3-ultra"
+	Enabled  bool
 }
 
-// DefaultTaggerConfig returns sensible defaults.
+// DefaultTaggerConfig returns sensible defaults for Bifrost.
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
-		Model:   "openrouter/nvidia/nemotron-3-ultra",
-		Enabled: false,
+		Endpoint: "http://localhost:8081/v1/chat/completions",
+		Model:    "openrouter/nvidia/nemotron-3-ultra",
+		Enabled:  false,
 	}
 }
 
 type tagger struct {
-	cfg    TaggerConfig
-	store  store.Store
-	client *bifrost.Client
-	log    *slog.Logger
+	cfg   TaggerConfig
+	store store.Store
+	log   *slog.Logger
 }
 
-// NewTagger creates a tag generator backed by the Bifrost Go SDK.
-func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) (*tagger, error) {
-	if !cfg.Enabled {
-		return &tagger{cfg: cfg, store: st, log: log}, nil
-	}
-
-	client, err := bifrost.Init(context.Background(), schemas.BifrostConfig{
-		Account: &tagAccount{},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("bifrost init: %w", err)
-	}
-
-	return &tagger{cfg: cfg, store: st, client: client, log: log}, nil
+// NewTagger creates a tag generator that calls Bifrost (OpenAI-compatible API).
+func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) *tagger {
+	return &tagger{cfg: cfg, store: st, log: log}
 }
 
 // GenerateAndSaveTags calls the AI model, extracts tags, and updates the document.
 func (t *tagger) GenerateAndSaveTags(ctx context.Context, docID string, content []byte) {
-	if !t.cfg.Enabled || t.client == nil {
+	if !t.cfg.Enabled {
 		return
 	}
 
@@ -91,44 +80,50 @@ func (t *tagger) GenerateAndSaveTags(ctx context.Context, docID string, content 
 }
 
 func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
-	provider, modelName := parseModel(t.cfg.Model)
+	systemPrompt := `Extract 3-5 relevant tags from the document content. Return ONLY a valid JSON array of lowercase strings. Example: ["technology","programming","golang"]. No other text.`
 
-	systemPrompt := "Extract 3-5 relevant tags from the document content. Return ONLY a valid JSON array of lowercase strings. Example: [\"technology\",\"programming\",\"golang\"]. No other text."
-
-	messages := []schemas.ChatMessage{
-		{
-			Role: schemas.ChatMessageRoleSystem,
-			Content: &schemas.ChatMessageContent{
-				ContentStr: &systemPrompt,
-			},
+	reqBody := map[string]any{
+		"model": t.cfg.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": systemPrompt},
+			{"role": "user", "content": "Document content:\n\n" + text},
 		},
-		{
-			Role: schemas.ChatMessageRoleUser,
-			Content: &schemas.ChatMessageContent{
-				ContentStr: schemas.Ptr("Document content:\n\n" + text),
-			},
-		},
+		"temperature": 0.3,
+		"max_tokens":  200,
 	}
 
-	resp, err := t.client.ChatCompletionRequest(
-		schemas.NewBifrostContext(ctx, schemas.NoDeadline),
-		&schemas.BifrostChatRequest{
-			Provider:    provider,
-			Model:       modelName,
-			Input:       messages,
-			Temperature: schemas.Ptr(0.3),
-			MaxTokens:   schemas.Ptr(200),
-		},
-	)
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", t.cfg.Endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("ai request: %w", err)
 	}
+	defer resp.Body.Close()
 
-	if resp.Choices == nil || len(resp.Choices) == 0 {
-		return nil, fmt.Errorf("no choices in response")
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("ai returned %d: %s", resp.StatusCode, string(b))
 	}
 
-	raw := strings.TrimSpace(*resp.Choices[0].Message.Content.ContentStr)
+	var chatResp chatCompletionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chatResp); err != nil {
+		return nil, fmt.Errorf("decode ai response: %w", err)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("no choices in ai response")
+	}
+
+	raw := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	raw = strings.TrimPrefix(raw, "```json")
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
@@ -145,73 +140,30 @@ func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
 	return tags, nil
 }
 
-// parseModel splits "provider/model" into (provider, model) components.
-func parseModel(modelArg string) (schemas.ModelProvider, string) {
-	parts := strings.SplitN(modelArg, "/", 2)
-	if len(parts) != 2 {
-		return schemas.OpenAI, modelArg
-	}
-	switch strings.ToLower(parts[0]) {
-	case "openai":
-		return schemas.OpenAI, parts[1]
-	case "anthropic":
-		return schemas.Anthropic, parts[1]
-	case "ollama":
-		return schemas.Ollama, parts[1]
-	case "openrouter":
-		return schemas.OpenRouter, parts[1]
-	case "google", "vertex":
-		return schemas.GoogleVertexAI, parts[1]
-	case "groq":
-		return schemas.Groq, parts[1]
-	case "mistral":
-		return schemas.MistralAI, parts[1]
-	default:
-		return schemas.OpenAI, parts[1]
-	}
+type chatCompletionResponse struct {
+	Choices []struct {
+		Message struct {
+			Content string `json:"content"`
+		} `json:"message"`
+	} `json:"choices"`
 }
 
-// tagAccount implements schemas.Account for Bifrost initialization.
-// API keys are read from environment variables (OPENAI_API_KEY, etc.).
-type tagAccount struct{}
-
-func (a *tagAccount) GetConfiguredProviders() ([]schemas.ModelProvider, error) {
-	providers := []schemas.ModelProvider{schemas.OpenAI}
-	if os.Getenv("ANTHROPIC_API_KEY") != "" {
-		providers = append(providers, schemas.Anthropic)
+func stripHTML(content []byte) string {
+	s := string(content)
+	for {
+		start := strings.Index(s, "<")
+		if start < 0 {
+			break
+		}
+		end := strings.Index(s[start:], ">")
+		if end < 0 {
+			break
+		}
+		end += start
+		s = s[:start] + s[end+1:]
 	}
-	if os.Getenv("OPENROUTER_API_KEY") != "" {
-		providers = append(providers, schemas.OpenRouter)
-	}
-	return providers, nil
+	return strings.TrimSpace(s)
 }
 
-func (a *tagAccount) GetKeysForProvider(_ *context.Context, provider schemas.ModelProvider) ([]schemas.Key, error) {
-	var key string
-	switch provider {
-	case schemas.OpenAI:
-		key = os.Getenv("OPENAI_API_KEY")
-	case schemas.Anthropic:
-		key = os.Getenv("ANTHROPIC_API_KEY")
-	case schemas.OpenRouter:
-		key = os.Getenv("OPENROUTER_API_KEY")
-	}
-	if key == "" {
-		return nil, fmt.Errorf("no API key for %s", provider)
-	}
-	return []schemas.Key{{Value: key, Models: schemas.WhiteList{"*"}, Weight: 1.0}}, nil
-}
-
-func (a *tagAccount) GetConfigForProvider(provider schemas.ModelProvider) (*schemas.ProviderConfig, error) {
-	return &schemas.ProviderConfig{
-		NetworkConfig:            schemas.DefaultNetworkConfig,
-		ConcurrencyAndBufferSize: schemas.DefaultConcurrencyAndBufferSize,
-	}, nil
-}
-
-// Close shuts down the Bifrost client.
-func (t *tagger) Close() {
-	if t.client != nil {
-		t.client.Shutdown()
-	}
-}
+// Close is a no-op for the HTTP-based tagger.
+func (t *tagger) Close() {}
