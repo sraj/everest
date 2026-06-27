@@ -26,7 +26,7 @@ export function EmojiPopover({ editor }: EmojiPopoverProps) {
         <span className="text-sm">😊</span>
       </ToolbarButton>
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 grid grid-cols-5 gap-1">
+        <div className="absolute top-full left-0 mt-1 z-50 w-48 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900 grid grid-cols-5 gap-0.5">
           {EMOJIS.map((emoji) => (
             <button
               key={emoji}
