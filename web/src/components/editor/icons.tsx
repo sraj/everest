@@ -31,6 +31,11 @@ import {
   ChevronDown,
   ChevronLeft,
   FileText,
+  Table as TableIcon,
+  TableRowsSplit,
+  Columns3,
+  IndentIncrease,
+  IndentDecrease,
 } from 'lucide-react'
 
 export function Undo() { return <Undo2 className="size-4" /> }
@@ -55,3 +60,9 @@ export function PageIcon() { return <FileText className="size-4" /> }
 
 export function SuperscriptIcon() { return <Superscript className="size-4" /> }
 export function SubscriptIcon() { return <Subscript className="size-4" /> }
+
+export function TableIconComponent() { return <TableIcon className="size-4" /> }
+export function AddRowBefore() { return <TableRowsSplit className="size-4" /> }
+export function AddColumnBefore() { return <Columns3 className="size-4" /> }
+export function IndentMore() { return <IndentIncrease className="size-4" /> }
+export function IndentLess() { return <IndentDecrease className="size-4" /> }

@@ -42,6 +42,10 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
           <EditorContent editor={editor} className="h-full" />
         </div>
       </div>
+      <div className="border-t border-neutral-200 dark:border-neutral-700 px-4 py-1.5 flex items-center gap-4 text-[11px] text-neutral-400 dark:text-neutral-500">
+        <span>{editor.storage.characterCount?.characters?.() ?? 0} characters</span>
+        <span>{editor.storage.characterCount?.words?.() ?? 0} words</span>
+      </div>
     </div>
   )
 }

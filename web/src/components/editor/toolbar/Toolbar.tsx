@@ -8,6 +8,7 @@ import { FontFamilyDropdown } from './FontFamilyDropdown'
 import { FontSizeDropdown } from './FontSizeDropdown'
 import { LineSpacingDropdown } from './LineSpacingDropdown'
 import { HeadingDropdown } from './HeadingDropdown'
+import { EmojiPopover } from './EmojiPopover'
 import { ALL_PAGE_SIZES } from '../extensions'
 import type { PageSizeKey } from '../extensions'
 import {
@@ -17,6 +18,8 @@ import {
   Blockquote, Code,
   AlignLeft, AlignCenter, AlignRight, Printer,
   HorizontalRule, ClearFormatting,
+  TableIconComponent, AddRowBefore, AddColumnBefore,
+  IndentMore, IndentLess,
 } from '../icons'
 
 interface ToolbarProps {
@@ -155,6 +158,8 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
           <ImageIcon />
         </ToolbarButton>
 
+        <EmojiPopover editor={editor} />
+
         <ToolbarDivider />
 
         {/* Headings */}
@@ -194,6 +199,29 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
         </ToolbarButton>
         <ToolbarButton onClick={() => editor.chain().focus().setTextAlign('right').run()} active={editor.isActive({ textAlign: 'right' })} title="Align Right">
           <AlignRight />
+        </ToolbarButton>
+
+        <ToolbarDivider />
+
+        {/* Indentation */}
+        <ToolbarButton onClick={() => editor.chain().focus().indent().run()} title="Indent">
+          <IndentMore />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().outdent().run()} title="Outdent">
+          <IndentLess />
+        </ToolbarButton>
+
+        <ToolbarDivider />
+
+        {/* Table controls */}
+        <ToolbarButton onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert Table">
+          <TableIconComponent />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().addColumnBefore().run()} title="Add Column">
+          <AddColumnBefore />
+        </ToolbarButton>
+        <ToolbarButton onClick={() => editor.chain().focus().addRowBefore().run()} title="Add Row">
+          <AddRowBefore />
         </ToolbarButton>
 
         <ToolbarDivider />
