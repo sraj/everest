@@ -70,6 +70,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		Title:     input.Title,
 		OwnerID:   input.OwnerID,
 		ContentID: contentID,
+		Tags:      model.Tags{},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}

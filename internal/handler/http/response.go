@@ -12,7 +12,7 @@ type DocumentResponse struct {
 	ContentType  string   `json:"content_type,omitempty"`
 	FileName     string   `json:"file_name,omitempty"`
 	ThumbnailURL string   `json:"thumbnail_url,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
+	Tags         []string `json:"tags"`
 	CreatedAt    string   `json:"created_at"`
 	UpdatedAt    string   `json:"updated_at"`
 }
