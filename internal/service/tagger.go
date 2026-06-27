@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -25,10 +26,17 @@ type TaggerConfig struct {
 // DefaultTaggerConfig returns sensible defaults for Bifrost.
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
-		Endpoint: "http://localhost:8081/v1/chat/completions",
-		Model:    "openrouter/nvidia/nemotron-3-ultra",
-		Enabled:  false,
+		Endpoint: envOrDefault("AI_TAGGER_ENDPOINT", "http://localhost:8081/v1/chat/completions"),
+		Model:    envOrDefault("AI_TAGGER_MODEL", "openrouter/nvidia/nemotron-3-ultra"),
+		Enabled:  strings.ToLower(os.Getenv("AI_TAGGER_ENABLED")) == "true",
 	}
+}
+
+func envOrDefault(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
 
 type tagger struct {
