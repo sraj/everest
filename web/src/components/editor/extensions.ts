@@ -11,7 +11,6 @@ import TaskItem from '@tiptap/extension-task-item'
 import Superscript from '@tiptap/extension-superscript'
 import Subscript from '@tiptap/extension-subscript'
 import Placeholder from '@tiptap/extension-placeholder'
-import Indent from '@tiptap/extension-indent'
 import Table from '@tiptap/extension-table'
 import TableRow from '@tiptap/extension-table-row'
 import TableCell from '@tiptap/extension-table-cell'
@@ -106,7 +105,6 @@ export function createExtensions(pageSize: PageSizeKey) {
     }),
     Superscript,
     Subscript,
-    Indent,
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),

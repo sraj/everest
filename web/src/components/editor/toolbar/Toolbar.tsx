@@ -19,7 +19,6 @@ import {
   AlignLeft, AlignCenter, AlignRight, Printer,
   HorizontalRule, ClearFormatting,
   TableIconComponent, AddRowBefore, AddColumnBefore,
-  IndentMore, IndentLess,
 } from '../icons'
 
 interface ToolbarProps {
@@ -193,15 +192,6 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
           </ToolbarButton>
           <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
             <HorizontalRule />
-          </ToolbarButton>
-
-          <ToolbarDivider />
-
-          <ToolbarButton onClick={() => editor.chain().focus().indent().run()} title="Increase indent">
-            <IndentMore />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().outdent().run()} title="Decrease indent">
-            <IndentLess />
           </ToolbarButton>
 
           <ToolbarDivider />
