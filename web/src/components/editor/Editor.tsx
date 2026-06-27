@@ -83,21 +83,11 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
   })
 
   useEffect(() => {
-    if (!editor) return
-    const el = editor.view.dom
-    const ro = new ResizeObserver(() => {
-      const view = editor.view as unknown as { requestMeasure?: () => void }
-      view.requestMeasure?.()
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [editor])
-
-  useEffect(() => {
     if (!editor || !shadowReady) return
-    // Shadow DOM fully painted — force pagination to recalculate via content re-set.
-    const html = editor.getHTML()
-    editor.commands.setContent(html, false)
+    editor.chain().focus().disablePagination().run()
+    requestAnimationFrame(() => {
+      editor.chain().focus().enablePagination().run()
+    })
   }, [shadowReady, editor])
 
   if (!editor) return null
