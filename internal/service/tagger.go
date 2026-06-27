@@ -25,7 +25,7 @@ type TaggerConfig struct {
 // DefaultTaggerConfig returns sensible defaults.
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
-		Model:   "openrouter/openai/gpt-4o-mini",
+		Model:   "openrouter/nvidia/nemotron-3-ultra",
 		Enabled: false,
 	}
 }
