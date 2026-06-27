@@ -66,6 +66,7 @@ func (r *documentStore) Update(ctx context.Context, doc *model.Document) error {
 	err := r.db.Update("documents").
 		Set("title", doc.Title).
 		Set("thumbnail_id", nullString(doc.ThumbnailID)).
+		Set("tags", pq.Array(doc.Tags)).
 		Set("updated_at", doc.UpdatedAt).
 		Where(dbx.Cond.Eq("id", doc.ID)).
 		ExecMustAffect(ctx)
