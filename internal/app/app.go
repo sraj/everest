@@ -95,8 +95,7 @@ func (a *App) Run() error {
 	}
 
 	docStore := postgres.NewDocumentStore(a.db)
-	profileStore := postgres.NewUserProfileStore(a.db)
-	st := store.New(docStore, contentStore, profileStore, a.db.Close, a.db.Ping)
+	st := store.New(docStore, contentStore, a.db.Close, a.db.Ping)
 
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
@@ -105,10 +104,8 @@ func (a *App) Run() error {
 	defer tagger.Close()
 
 	docService := service.NewDocumentService(st, thumbnailSvc, tagger, a.log)
-	profileService := service.NewProfileService(st, a.log)
 
 	httpHandler := handlerhttp.New(docService, a.log)
-	httpHandler.SetProfileService(profileService)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
 		return a.db.Ping(ctx)
 	})
