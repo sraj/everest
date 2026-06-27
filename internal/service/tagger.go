@@ -27,7 +27,7 @@ type TaggerConfig struct {
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
 		Endpoint: envOrDefault("AI_TAGGER_ENDPOINT", "https://openrouter.ai/api/v1/chat/completions"),
-		Model:    envOrDefault("AI_TAGGER_MODEL", "nvidia/nemotron-3-ultra"),
+		Model:    envOrDefault("AI_TAGGER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free"),
 		Enabled:  strings.ToLower(os.Getenv("AI_TAGGER_ENABLED")) == "true",
 	}
 }
