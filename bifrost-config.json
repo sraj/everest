@@ -1,24 +1,21 @@
 {
+  "$schema": "https://www.getbifrost.ai/schema",
+  "config_store": {
+    "enabled": false
+  },
   "providers": {
-    "opencode": {
+    "openrouter": {
       "keys": [
         {
-          "name": "opencode-key",
-          "value": "env.OPENCODE_GO_API_KEY",
+          "name": "openrouter-key-1",
+          "value": {
+            "from_env": true,
+            "env_var": "OPENROUTER_API_KEY"
+          },
           "models": ["*"],
           "weight": 1.0
         }
-      ],
-      "network_config": {
-        "base_url": "https://opencode.ai/zen/v1"
-      },
-      "custom_provider_config": {
-        "base_provider_type": "openai",
-        "allowed_requests": {
-          "chat_completion": true,
-          "chat_completion_stream": false
-        }
-      }
+      ]
     }
   }
 }

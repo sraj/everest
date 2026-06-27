@@ -27,7 +27,7 @@ type TaggerConfig struct {
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
 		Endpoint: envOrDefault("AI_TAGGER_ENDPOINT", "http://localhost:8081/v1/chat/completions"),
-		Model:    envOrDefault("AI_TAGGER_MODEL", "opencode/mimo-v2.5-free"),
+		Model:    envOrDefault("AI_TAGGER_MODEL", "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"),
 		Enabled:  strings.ToLower(os.Getenv("AI_TAGGER_ENABLED")) == "true",
 	}
 }
@@ -110,9 +110,6 @@ func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("OPENROUTER_API_KEY"))
-	req.Header.Set("HTTP-Referer", "https://everest.app")
-	req.Header.Set("X-Title", "Everest Docs")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -178,3 +175,33 @@ func stripHTML(content []byte) string {
 
 // Close is a no-op for the HTTP-based tagger.
 func (t *tagger) Close() {}
+
+// InitBifrostProvider configures the OpenRouter provider in Bifrost via its REST API.
+// Call once at startup if BIFROST_URL is set.
+func InitBifrostProvider(ctx context.Context, bifrostURL, openRouterKey string) error {
+	if bifrostURL == "" || openRouterKey == "" {
+		return nil
+	}
+	payload := map[string]any{
+		"provider": "openrouter",
+		"keys": []map[string]any{
+			{"name": "or-key", "value": openRouterKey, "models": []string{"*"}, "weight": 1.0},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	req, err := http.NewRequestWithContext(ctx, "POST", bifrostURL+"/api/providers", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("bifrost init: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("bifrost init failed (%d): %s", resp.StatusCode, string(b))
+	}
+	return nil
+}
