@@ -102,7 +102,7 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
       {/* Row 1 — History + Typography + Inline formatting + Insert */}
-      <div className="flex flex-wrap items-center gap-0.5 bg-white px-3 py-1.5 dark:bg-neutral-950 border-b border-neutral-300 dark:border-neutral-700">
+      <div className="flex flex-wrap items-center gap-0.5 bg-neutral-50/80 px-3 py-1.5 dark:bg-neutral-900 border-b border-neutral-300 dark:border-neutral-700">
         <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
           <Undo />
         </ToolbarButton>
@@ -162,7 +162,7 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
       </div>
 
       {/* Row 2 — Structure: Headings, Lists, Blocks, Alignment, Tables */}
-      <div className="flex flex-wrap items-center gap-0.5 bg-white px-3 py-1.5 border-b border-neutral-300 dark:bg-neutral-950 dark:border-neutral-700">
+      <div className="flex flex-wrap items-center gap-0.5 bg-neutral-100/80 px-3 py-1.5 border-b border-neutral-300 dark:bg-neutral-800 dark:border-neutral-700">
         <HeadingDropdown editor={editor} />
 
         <ToolbarDivider />
