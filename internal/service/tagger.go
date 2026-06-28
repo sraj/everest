@@ -18,12 +18,11 @@ import (
 
 // TaggerConfig holds AI tag generation configuration.
 type TaggerConfig struct {
-	Endpoint string // Bifrost gateway URL (http://localhost:8081/v1/chat/completions)
-	Model    string // "openrouter/nvidia/nemotron-3-ultra"
+	Endpoint string
+	Model    string
 	Enabled  bool
 }
 
-// DefaultTaggerConfig returns sensible defaults.
 func DefaultTaggerConfig() TaggerConfig {
 	return TaggerConfig{
 		Endpoint: envOrDefault("AI_TAGGER_ENDPOINT", "http://localhost:8081/v1/chat/completions"),
@@ -39,19 +38,25 @@ func envOrDefault(key, defaultVal string) string {
 	return defaultVal
 }
 
-type tagger struct {
+// TaggerService generates and saves tags for documents using an AI model.
+type TaggerService interface {
+	GenerateAndSaveTags(ctx context.Context, docID string, content []byte)
+	Close()
+}
+
+type taggerService struct {
 	cfg   TaggerConfig
 	store store.Store
 	log   *slog.Logger
 }
 
-// NewTagger creates a tag generator that calls Bifrost (OpenAI-compatible API).
-func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) *tagger {
-	return &tagger{cfg: cfg, store: st, log: log}
+// NewTagger creates a tag generator backed by OpenRouter via Bifrost.
+func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) TaggerService {
+	return &taggerService{cfg: cfg, store: st, log: log}
 }
 
 // GenerateAndSaveTags calls the AI model, extracts tags, and updates the document.
-func (t *tagger) GenerateAndSaveTags(ctx context.Context, docID string, content []byte) {
+func (t *taggerService) GenerateAndSaveTags(ctx context.Context, docID string, content []byte) {
 	if !t.cfg.Enabled {
 		return
 	}
@@ -87,7 +92,7 @@ func (t *tagger) GenerateAndSaveTags(ctx context.Context, docID string, content 
 	t.log.Info("tags generated", "doc_id", docID, "tags", tags)
 }
 
-func (t *tagger) callAI(ctx context.Context, text string) (model.Tags, error) {
+func (t *taggerService) callAI(ctx context.Context, text string) (model.Tags, error) {
 	systemPrompt := `Extract 3-5 relevant tags from the document content. Return a JSON object with a "tags" array. Example: {"tags":["technology","programming","golang"]}. No other text.`
 
 	reqBody := map[string]any{
@@ -176,7 +181,7 @@ func stripHTML(content []byte) string {
 }
 
 // Close is a no-op for the HTTP-based tagger.
-func (t *tagger) Close() {}
+func (t *taggerService) Close() {}
 
 // InitBifrostProvider configures the OpenRouter provider in Bifrost via its REST API.
 // Call once at startup if BIFROST_URL is set.

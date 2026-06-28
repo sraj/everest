@@ -30,17 +30,17 @@ type DocumentService interface {
 type documentService struct {
 	store        store.Store
 	thumbnailSvc ThumbnailService
-	tagger       *tagger
+	taggerSvc    TaggerService
 	pool         *jobs.Pool
 	log          *slog.Logger
 }
 
 // NewDocumentService creates a new document service.
-func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, tagger *tagger, pool *jobs.Pool, log *slog.Logger) DocumentService {
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, taggerSvc TaggerService, pool *jobs.Pool, log *slog.Logger) DocumentService {
 	return &documentService{
 		store:        st,
 		thumbnailSvc: thumbnailSvc,
-		tagger:       tagger,
+		taggerSvc:    taggerSvc,
 		pool:         pool,
 		log:          log,
 	}
@@ -97,9 +97,9 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	}
 
 	// Generate tags asynchronously
-	if s.tagger != nil {
+	if s.taggerSvc != nil {
 		s.pool.Submit(func(ctx context.Context) error {
-			s.tagger.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+			s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
 			return nil
 		})
 	}
@@ -157,9 +157,9 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 		}
 
 		// Regenerate tags when content changes
-		if s.tagger != nil {
+		if s.taggerSvc != nil {
 			s.pool.Submit(func(ctx context.Context) error {
-				s.tagger.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+				s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
 				return nil
 			})
 		}
