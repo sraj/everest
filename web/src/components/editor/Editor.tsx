@@ -4,6 +4,7 @@ import { createExtensions } from './extensions'
 import type { PageSizeKey } from './extensions'
 import { Toolbar } from './toolbar/Toolbar'
 import { ContextMenu } from './ContextMenu'
+import { FindReplace } from './FindReplace'
 import './editor.css'
 
 interface EditorProps {
@@ -47,8 +48,9 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
   if (!editor) return null
 
   return (
-    <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+    <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950 relative">
       <Toolbar editor={editor} pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
+      <FindReplace editor={editor} />
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-900">
           <EditorContent editor={editor} className="h-full" />
