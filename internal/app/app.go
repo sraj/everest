@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/sraj/everest/internal/config"
 	handlerhttp "github.com/sraj/everest/internal/handler/http"
 	handlergrpc "github.com/sraj/everest/internal/handler/grpc"
@@ -97,7 +98,8 @@ func (a *App) Run() error {
 	}
 
 	docStore := postgres.NewDocumentStore(a.db)
-	st := store.New(docStore, contentStore, a.db.Close, a.db.Ping)
+	profileStore := postgres.NewUserProfileStore(a.db)
+	st := store.New(docStore, contentStore, profileStore, a.db.Close, a.db.Ping)
 
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
