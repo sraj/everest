@@ -110,6 +110,67 @@ services:
       - bifrost_data:/app/data
       - ./bifrost-config.json:/app/data/config.json:ro
 
+  zitadel-postgres:
+    image: postgres:17.2-alpine
+    container_name: everest-zitadel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: zitadel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d zitadel -U postgres"]
+      interval: 10s
+      timeout: 30s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - zitadel_postgres_data:/var/lib/postgresql/data
+    networks:
+      - zitadel
+    profiles:
+      - zitadel
+
+  zitadel-proxy:
+    image: traefik:v3.6.8
+    container_name: everest-zitadel-proxy
+    restart: unless-stopped
+    profiles:
+      - zitadel
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=everest-zitadel
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --ping=true
+      - --ping.entrypoint=web
+      - --log.level=INFO
+      - --accesslog=true
+    ports:
+      - "8082:80"
+    networks:
+      - zitadel
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      zitadel-api:
+        condition: service_healthy
+      zitadel-login:
+        condition: service_healthy
+
+  zitadel-api:
+    image: ghcr.io/zitadel/zitadel:v4.13.0
+    container_name: everest-zitadel-api
+    restart: unless-stopped
+    profiles:
+      - zitadel
+    user: "0"
+    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}"
+    environment:
+      ZITADEL_PORT: 8080
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_DOMAIN:-localhost}
+
 volumes:
   postgres_data:
   minio_data:
