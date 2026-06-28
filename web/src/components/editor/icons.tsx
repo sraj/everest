@@ -39,7 +39,7 @@ import {
 } from '@tabler/icons-react'
 
 function icon(Icon: React.FC<{ size?: number | string; stroke?: number }>) {
-  return <Icon size={20} stroke={1.5} />
+  return <Icon size={20} stroke={2} />
 }
 
 export function Undo() { return icon(IconArrowBackUp) }

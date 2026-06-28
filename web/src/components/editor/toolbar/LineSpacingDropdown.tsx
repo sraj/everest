@@ -3,6 +3,18 @@ import type { Editor } from '@tiptap/react'
 import { ToolbarButton } from './ToolbarButton'
 import { LINE_HEIGHTS } from '../extensions'
 
+function LineSpacingIcon() {
+  return (
+    <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M3 5h18" />
+      <path d="M3 12h13" />
+      <path d="M3 19h18" />
+      <path d="M8 9l-3 3 3 3" />
+      <path d="M8 15l-3-3 3-3" />
+    </svg>
+  )
+}
+
 interface LineSpacingDropdownProps {
   editor: Editor
 }
@@ -34,9 +46,7 @@ export function LineSpacingDropdown({ editor }: LineSpacingDropdownProps) {
   return (
     <div ref={ref} className="relative">
       <ToolbarButton onClick={() => setOpen(!open)} active={open} title="Line spacing">
-        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 4h18 M3 12h18 M3 20h18 M9 8l3-3 3 3 M9 16l3 3 3-3" />
-        </svg>
+        <LineSpacingIcon />
       </ToolbarButton>
 
       {open && (
