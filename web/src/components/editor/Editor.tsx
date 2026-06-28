@@ -5,6 +5,7 @@ import type { PageSizeKey } from './extensions'
 import { Toolbar } from './toolbar/Toolbar'
 import { ContextMenu } from './ContextMenu'
 import { FindReplace } from './FindReplace'
+import { MenuBar } from './MenuBar'
 import './editor.css'
 
 interface EditorProps {
@@ -18,6 +19,7 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
   onPageSizeChange: (size: PageSizeKey) => void
 }) {
   const [pageCount, setPageCount] = useState(1)
+  const [findVisible, setFindVisible] = useState(false)
   const editor = useEditor({
     extensions: createExtensions(pageSize),
     content: content || '',
@@ -45,12 +47,33 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
     return () => observer.disconnect()
   }, [editor])
 
+  useEffect(() => {
+    if (!editor) return
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        setFindVisible(true)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [editor])
+
   if (!editor) return null
 
   return (
     <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950 relative">
+      <MenuBar
+        editor={editor}
+        onOpenFind={() => setFindVisible(true)}
+        onInsertTable={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        onInsertToC={() => {}}
+        onInsertEmoji={() => {}}
+        onInsertSymbol={() => {}}
+        pageSize={pageSize}
+      />
       <Toolbar editor={editor} pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
-      <FindReplace editor={editor} />
+      {findVisible && <FindReplace editor={editor} onClose={() => setFindVisible(false)} />}
       <div className="flex-1 overflow-hidden">
         <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-900">
           <EditorContent editor={editor} className="h-full" />

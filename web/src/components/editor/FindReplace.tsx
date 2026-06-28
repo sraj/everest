@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 
 interface FindReplaceProps {
   editor: Editor
+  onClose: () => void
 }
 
 function textPositionToDocPos(editor: Editor, text: string, searchIndex: number, searchLen: number): { from: number; to: number } | null {
@@ -30,8 +31,7 @@ function textPositionToDocPos(editor: Editor, text: string, searchIndex: number,
   return foundStart >= 0 && foundEnd >= 0 ? { from: foundStart, to: foundEnd } : null
 }
 
-export function FindReplace({ editor }: FindReplaceProps) {
-  const [visible, setVisible] = useState(false)
+export function FindReplace({ editor, onClose }: FindReplaceProps) {
   const [query, setQuery] = useState('')
   const [replace, setReplace] = useState('')
   const [showReplace, setShowReplace] = useState(false)
@@ -39,6 +39,8 @@ export function FindReplace({ editor }: FindReplaceProps) {
   const [totalMatches, setTotalMatches] = useState(0)
   const [matches, setMatches] = useState<{ from: number; to: number }[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
 
   const findMatches = useCallback((q: string) => {
     if (!q) {
@@ -52,11 +54,7 @@ export function FindReplace({ editor }: FindReplaceProps) {
     let idx = 0
     while ((idx = text.indexOf(q, idx)) >= 0) {
       const pos = textPositionToDocPos(editor, text, idx, q.length)
-      if (pos) {
-        results.push(pos)
-        // highlight
-        editor.chain().setTextSelection(pos).setHighlight({ color: '#fde047' }).run()
-      }
+      if (pos) results.push(pos)
       idx++
     }
     setMatches(results)
@@ -67,26 +65,18 @@ export function FindReplace({ editor }: FindReplaceProps) {
     }
   }, [editor])
 
-  useEffect(() => {
-    findMatches(query)
-  }, [query, findMatches])
+  useEffect(() => { findMatches(query) }, [query, findMatches])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault()
-        setVisible(true)
-        setTimeout(() => inputRef.current?.focus(), 0)
-      }
       if (e.key === 'Escape') {
-        setVisible(false)
-        setQuery('')
         editor.commands.unsetHighlight()
+        onClose()
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [editor])
+  }, [editor, onClose])
 
   const navigateTo = (dir: 1 | -1) => {
     if (matches.length === 0) return
@@ -97,15 +87,12 @@ export function FindReplace({ editor }: FindReplaceProps) {
 
   const replaceOne = () => {
     if (matches.length === 0 || matchIndex >= matches.length) return
-    const m = matches[matchIndex]
-    editor.chain().setTextSelection(m).insertContent(replace).run()
-    // Refind matches after content change
+    editor.chain().setTextSelection(matches[matchIndex]).insertContent(replace).run()
     setTimeout(() => findMatches(query), 0)
   }
 
   const replaceAll = () => {
     if (matches.length === 0) return
-    // Replace all from last to first to preserve positions
     const sorted = [...matches].sort((a, b) => b.from - a.from)
     sorted.forEach((m) => {
       editor.chain().setTextSelection(m).insertContent(replace).run()
@@ -114,17 +101,12 @@ export function FindReplace({ editor }: FindReplaceProps) {
   }
 
   const close = () => {
-    setVisible(false)
-    setQuery('')
-    setReplace('')
-    setShowReplace(false)
     editor.commands.unsetHighlight()
+    onClose()
   }
 
-  if (!visible) return null
-
   return (
-    <div className="absolute top-2 right-2 z-30 flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+    <div className="absolute top-[60px] right-2 z-30 flex items-center gap-1 rounded-lg border border-neutral-200 bg-white px-2 py-1.5 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
       <input
         ref={inputRef}
         value={query}
@@ -146,12 +128,7 @@ export function FindReplace({ editor }: FindReplaceProps) {
       </button>
       {showReplace && (
         <>
-          <input
-            value={replace}
-            onChange={(e) => setReplace(e.target.value)}
-            placeholder="Replace..."
-            className="w-32 bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500"
-          />
+          <input value={replace} onChange={(e) => setReplace(e.target.value)} placeholder="Replace..." className="w-32 bg-transparent text-sm text-neutral-700 outline-none placeholder:text-neutral-400 dark:text-neutral-300 dark:placeholder:text-neutral-500" />
           <button onClick={replaceOne} disabled={matches.length === 0} className="rounded px-2 py-0.5 text-[11px] font-medium bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 disabled:opacity-30 transition-colors">Replace</button>
           <button onClick={replaceAll} disabled={matches.length === 0} className="rounded px-2 py-0.5 text-[11px] font-medium bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 disabled:opacity-30 transition-colors">All</button>
         </>
