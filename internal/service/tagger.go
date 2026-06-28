@@ -10,13 +10,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/internal/store"
 )
 
-// TaggerConfig holds AI tag generation configuration.
 type TaggerConfig struct {
 	Endpoint string
 	Model    string
@@ -38,58 +35,35 @@ func envOrDefault(key, defaultVal string) string {
 	return defaultVal
 }
 
-// TaggerService generates and saves tags for documents using an AI model.
+// TaggerService generates tags for document content using an AI model.
 type TaggerService interface {
-	GenerateAndSaveTags(ctx context.Context, docID string, content []byte)
+	Generate(ctx context.Context, content []byte) (model.Tags, error)
 	Close()
 }
 
 type taggerService struct {
-	cfg   TaggerConfig
-	store store.Store
-	log   *slog.Logger
+	cfg TaggerConfig
+	log *slog.Logger
 }
 
 // NewTagger creates a tag generator backed by OpenRouter via Bifrost.
-func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) TaggerService {
-	return &taggerService{cfg: cfg, store: st, log: log}
+func NewTagger(cfg TaggerConfig, log *slog.Logger) TaggerService {
+	return &taggerService{cfg: cfg, log: log}
 }
 
-// GenerateAndSaveTags calls the AI model, extracts tags, and updates the document.
-func (t *taggerService) GenerateAndSaveTags(ctx context.Context, docID string, content []byte) {
+// Generate calls the AI model and returns extracted tags.
+func (t *taggerService) Generate(ctx context.Context, content []byte) (model.Tags, error) {
 	if !t.cfg.Enabled {
-		return
+		return nil, nil
 	}
 
 	text := stripHTML(content)
 	if len(text) < 50 {
-		return
+		return nil, nil
 	}
 	text = text[:min(len(text), 3000)]
 
-	tags, err := t.callAI(ctx, text)
-	if err != nil {
-		t.log.Error("failed to generate tags", "error", err.Error(), "doc_id", docID)
-		return
-	}
-	if len(tags) == 0 {
-		return
-	}
-
-	doc, err := t.store.Document().GetByID(ctx, docID)
-	if err != nil {
-		t.log.Error("document not found for tags", "error", err.Error(), "doc_id", docID)
-		return
-	}
-
-	doc.Tags = tags
-	doc.UpdatedAt = time.Now()
-	if err := t.store.Document().Update(ctx, doc); err != nil {
-		t.log.Error("failed to save tags", "error", err.Error(), "doc_id", docID)
-		return
-	}
-
-	t.log.Info("tags generated", "doc_id", docID, "tags", tags)
+	return t.callAI(ctx, text)
 }
 
 func (t *taggerService) callAI(ctx context.Context, text string) (model.Tags, error) {
@@ -140,7 +114,6 @@ func (t *taggerService) callAI(ctx context.Context, text string) (model.Tags, er
 
 	raw := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 
-	// With response_format: json_object, the output is a JSON object with a "tags" key.
 	var result struct {
 		Tags model.Tags `json:"tags"`
 	}
@@ -180,11 +153,8 @@ func stripHTML(content []byte) string {
 	return strings.TrimSpace(s)
 }
 
-// Close is a no-op for the HTTP-based tagger.
 func (t *taggerService) Close() {}
 
-// InitBifrostProvider configures the OpenRouter provider in Bifrost via its REST API.
-// Call once at startup if BIFROST_URL is set.
 func InitBifrostProvider(ctx context.Context, bifrostURL, openRouterKey string) error {
 	if bifrostURL == "" || openRouterKey == "" {
 		return nil

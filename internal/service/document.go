@@ -99,7 +99,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	// Generate tags asynchronously
 	if s.taggerSvc != nil {
 		s.pool.Submit(func(ctx context.Context) error {
-			s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+			s.generateAndSaveTags(ctx, doc.ID, input.Content)
 			return nil
 		})
 	}
@@ -159,7 +159,7 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 		// Regenerate tags when content changes
 		if s.taggerSvc != nil {
 			s.pool.Submit(func(ctx context.Context) error {
-				s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+				s.generateAndSaveTags(ctx, doc.ID, input.Content)
 				return nil
 			})
 		}
@@ -266,6 +266,32 @@ func (s *documentService) generateAndSaveThumbnail(ctx context.Context, docID st
 	}
 
 	s.log.Info("thumbnail generated and saved", "doc_id", docID, "thumbnail_id", thumbnailID)
+}
+
+func (s *documentService) generateAndSaveTags(ctx context.Context, docID string, content []byte) {
+	tags, err := s.taggerSvc.Generate(ctx, content)
+	if err != nil {
+		s.log.Error("failed to generate tags", "error", err.Error(), "doc_id", docID)
+		return
+	}
+	if len(tags) == 0 {
+		return
+	}
+
+	doc, err := s.store.Document().GetByID(ctx, docID)
+	if err != nil {
+		s.log.Error("document not found for tags", "error", err.Error(), "doc_id", docID)
+		return
+	}
+
+	doc.Tags = tags
+	doc.UpdatedAt = time.Now()
+	if err := s.store.Document().Update(ctx, doc); err != nil {
+		s.log.Error("failed to save tags", "error", err.Error(), "doc_id", docID)
+		return
+	}
+
+	s.log.Info("tags generated", "doc_id", docID, "tags", tags)
 }
 
 func (s *documentService) translateError(err error, id string) error {

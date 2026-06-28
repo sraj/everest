@@ -101,7 +101,7 @@ func (a *App) Run() error {
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
 
-	tagger := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
+	tagger := service.NewTagger(service.DefaultTaggerConfig(), a.log)
 	defer tagger.Close()
 
 	pool := jobs.New(jobs.DefaultConfig(a.log))
