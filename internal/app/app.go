@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/sraj/everest/internal/config"
 	handlerhttp "github.com/sraj/everest/internal/handler/http"
 	handlergrpc "github.com/sraj/everest/internal/handler/grpc"
@@ -15,6 +14,7 @@ import (
 	"github.com/sraj/everest/internal/datastore/minio"
 	"github.com/sraj/everest/internal/datastore/postgres"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/jobs"
 	"github.com/sraj/everest/internal/store"
 	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
@@ -97,14 +97,18 @@ func (a *App) Run() error {
 	}
 
 	docStore := postgres.NewDocumentStore(a.db)
-	profileStore := postgres.NewUserProfileStore(a.db)
-	st := store.New(docStore, contentStore, profileStore, a.db.Close, a.db.Ping)
+	st := store.New(docStore, contentStore, a.db.Close, a.db.Ping)
 
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
 
-	docService := service.NewDocumentService(st, thumbnailSvc, a.log)
-	profileService := service.NewProfileService(st, a.log)
+	tagger := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
+	defer tagger.Close()
+
+	pool := jobs.New(jobs.DefaultConfig(a.log))
+	defer pool.Shutdown(30 * time.Second)
+
+	docService := service.NewDocumentService(st, thumbnailSvc, tagger, pool, a.log)
 
 	var authMiddleware fiber.Handler
 	var bffHandler *auth.BFFHandler
@@ -131,7 +135,6 @@ func (a *App) Run() error {
 	if bffHandler != nil {
 		httpHandler.SetBFFHandler(bffHandler)
 	}
-	httpHandler.SetProfileService(profileService)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
 		return a.db.Ping(ctx)
 	})

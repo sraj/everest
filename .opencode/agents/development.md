@@ -43,6 +43,28 @@ web/                          # React frontend (Vite + TypeScript)
 
 ## Code Organization Rules
 
+### Constructor patterns
+All injectable dependencies **must** be injected as interfaces, never concrete types.
+
+```go
+// GOOD — constructors return interfaces
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, ...) DocumentService
+func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) TaggerService
+func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) ThumbnailService
+func NewDocumentStore(db *dbx.DB) store.DocumentStore
+func NewContentStore(cfg Config) (store.ContentStore, error)
+func New(doc, content, closer, pinger) Store
+
+// OK — concrete for non-injectables (transport, infrastructure)
+func New(docService service.DocumentService, log *slog.Logger) *Handler   // handler
+func New(cfg Config) *Pool                                                 // job pool
+```
+
+### Interface definition location
+- **Service interfaces**: defined in the same file as their implementation (e.g., `DocumentService` in `document.go`)
+- **Store interfaces**: defined in `internal/store/` (centralized)
+- **Models**: no interfaces, pure data types in `internal/domain/model/`
+
 ### Package dependency direction
 ```
 handler → service → store ← infrastructure
@@ -197,6 +219,44 @@ func toDocumentResponse(doc *model.Document) DocumentResponse { ... }
 // BAD — returning domain model directly (couples API to DB schema)
 c.JSON(doc)
 ```
+
+---
+
+## Background Jobs
+
+Use `jobs.Pool` for all async work. Never use raw `go func()` in services.
+
+```go
+// GOOD — uses worker pool with graceful shutdown and retries
+s.pool.Submit(func(ctx context.Context) error {
+    return s.generateAndSaveThumbnail(ctx, docID, content)
+})
+
+// BAD — raw goroutine, no lifecycle control, no retries
+go s.generateAndSaveThumbnail(context.Background(), docID, content)
+```
+
+### Pool configuration
+```go
+pool := jobs.New(jobs.Config{
+    Workers:     4,     // concurrent goroutines
+    QueueSize:   100,   // buffered jobs before backpressure
+    MaxAttempts: 2,     // retry count for failed 5xx jobs (0 = no retry)
+    Log:         log,
+})
+defer pool.Shutdown(30 * time.Second)  // drain queue before exit
+```
+
+### Retry behavior
+- **Retries** only `5xx` errors — client errors (`4xx`) are never retried.
+- **Backoff**: 500ms, then 1s between attempts.
+- **Max attempts**: configurable, defaults to 2 retries (3 total attempts).
+- **Job timeout**: each job gets a 120-second context deadline.
+
+### Adding a new background job
+1. Inject `*jobs.Pool` into the service constructor.
+2. Call `s.pool.Submit(func(ctx context.Context) error { ... })` in the service method.
+3. Always respect the `ctx` — check `ctx.Err()` for cancellation in long-running work.
 
 ---
 

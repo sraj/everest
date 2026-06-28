@@ -9,6 +9,7 @@ type Document struct {
 	OwnerID     string    `json:"owner_id" db:"owner_id"`
 	ContentID   string    `json:"content_id" db:"content_id"`     // MinIO object key for content
 	ThumbnailID *string   `json:"thumbnail_id" db:"thumbnail_id"` // MinIO object key for thumbnail
+	Tags        Tags      `json:"tags" db:"tags"`
 	CreatedAt   time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
 }

@@ -10,9 +10,9 @@ function ToolbarButtonInner({ active, className = '', children, ...props }: Tool
     <button
       ref={ref}
       data-state={active ? 'on' : 'off'}
-      className={`inline-flex items-center justify-center size-8 rounded-md transition-colors duration-150 disabled:opacity-40 disabled:cursor-not-allowed
-        data-[state=on]:bg-neutral-200 data-[state=on]:text-neutral-900 dark:data-[state=on]:bg-neutral-700 dark:data-[state=on]:text-white
-        text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-white
+      className={`inline-flex items-center justify-center size-8 rounded transition-colors duration-100 disabled:opacity-30 disabled:cursor-not-allowed
+        data-[state=on]:bg-neutral-300/60 data-[state=on]:text-neutral-900 dark:data-[state=on]:bg-neutral-600 dark:data-[state=on]:text-white
+        text-neutral-600 hover:bg-neutral-200/60 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-700/60 dark:hover:text-white
         ${className}`}
       {...props}
     >
@@ -24,5 +24,5 @@ function ToolbarButtonInner({ active, className = '', children, ...props }: Tool
 export const ToolbarButton = forwardRef(ToolbarButtonInner)
 
 export function ToolbarDivider() {
-  return <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+  return <div className="mx-0.5 h-5 w-px bg-neutral-300 dark:bg-neutral-600" />
 }

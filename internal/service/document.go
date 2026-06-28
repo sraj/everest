@@ -10,33 +10,38 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
+	"github.com/sraj/everest/internal/jobs"
 	"github.com/sraj/everest/internal/store"
 )
 
 var htmlPolicy = bluemonday.UGCPolicy()
 
-// DocumentService defines the interface for document business logic.
+// DocumentService defines the interface for document business logic
 type DocumentService interface {
 	Create(ctx context.Context, input CreateDocumentInput) (*model.Document, error)
-	GetByID(ctx context.Context, id, ownerID string) (*model.Document, error)
-	GetContent(ctx context.Context, id, ownerID string) ([]byte, error)
-	Update(ctx context.Context, input UpdateDocumentInput, ownerID string) (*model.Document, error)
-	Delete(ctx context.Context, id, ownerID string) error
-	List(ctx context.Context, page model.Page, ownerID string) (*model.PageResult, error)
-	GetThumbnail(ctx context.Context, id, ownerID string) ([]byte, error)
+	GetByID(ctx context.Context, id string) (*model.Document, error)
+	GetContent(ctx context.Context, id string) ([]byte, error)
+	Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error)
+	Delete(ctx context.Context, id string) error
+	List(ctx context.Context, page model.Page) (*model.PageResult, error)
+	GetThumbnail(ctx context.Context, id string) ([]byte, error)
 }
 
 type documentService struct {
 	store        store.Store
 	thumbnailSvc ThumbnailService
+	taggerSvc    TaggerService
+	pool         *jobs.Pool
 	log          *slog.Logger
 }
 
 // NewDocumentService creates a new document service.
-func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, log *slog.Logger) DocumentService {
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, taggerSvc TaggerService, pool *jobs.Pool, log *slog.Logger) DocumentService {
 	return &documentService{
 		store:        st,
 		thumbnailSvc: thumbnailSvc,
+		taggerSvc:    taggerSvc,
+		pool:         pool,
 		log:          log,
 	}
 }
@@ -55,7 +60,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	contentID := uuid.New().String()
 	now := time.Now()
 
-	// Sanitize and save content to MinIO.
+	// Save content to MinIO
 	contentType := input.ContentType
 	if contentType == "" {
 		contentType = "text/html"
@@ -72,6 +77,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 		Title:     input.Title,
 		OwnerID:   input.OwnerID,
 		ContentID: contentID,
+		Tags:      model.Tags{},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -84,32 +90,37 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 
 	// Generate thumbnail asynchronously after document exists in DB
 	if s.thumbnailSvc != nil && len(input.Content) > 0 {
-		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
+		s.pool.Submit(func(ctx context.Context) error {
+			s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
+			return nil
+		})
+	}
+
+	// Generate tags asynchronously
+	if s.taggerSvc != nil {
+		s.pool.Submit(func(ctx context.Context) error {
+			s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+			return nil
+		})
 	}
 
 	return doc, nil
 }
 
-// GetByID retrieves a document by ID, verifying ownership.
-func (s *documentService) GetByID(ctx context.Context, id, ownerID string) (*model.Document, error) {
+// GetByID retrieves a document by ID
+func (s *documentService) GetByID(ctx context.Context, id string) (*model.Document, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
-	}
-	if doc.OwnerID != ownerID {
-		return nil, apperror.Forbidden("document %s not accessible", id)
 	}
 	return doc, nil
 }
 
-// GetContent retrieves document content, verifying ownership.
-func (s *documentService) GetContent(ctx context.Context, id, ownerID string) ([]byte, error) {
+// GetContent retrieves document content
+func (s *documentService) GetContent(ctx context.Context, id string) ([]byte, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
-	}
-	if doc.OwnerID != ownerID {
-		return nil, apperror.Forbidden("document %s not accessible", id)
 	}
 
 	return s.store.Content().Get(ctx, doc.ContentID)
@@ -122,14 +133,11 @@ type UpdateDocumentInput struct {
 	Content []byte
 }
 
-// Update updates an existing document, verifying ownership.
-func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput, ownerID string) (*model.Document, error) {
+// Update updates an existing document
+func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput) (*model.Document, error) {
 	doc, err := s.store.Document().GetByID(ctx, input.ID)
 	if err != nil {
 		return nil, s.translateError(err, input.ID)
-	}
-	if doc.OwnerID != ownerID {
-		return nil, apperror.Forbidden("document %s not accessible", input.ID)
 	}
 
 	// Update content in MinIO
@@ -142,7 +150,18 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput,
 
 		// Regenerate thumbnail asynchronously when content changes
 		if s.thumbnailSvc != nil && len(input.Content) > 0 {
-			go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
+			s.pool.Submit(func(ctx context.Context) error {
+				s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
+				return nil
+			})
+		}
+
+		// Regenerate tags when content changes
+		if s.taggerSvc != nil {
+			s.pool.Submit(func(ctx context.Context) error {
+				s.taggerSvc.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+				return nil
+			})
 		}
 	}
 
@@ -159,14 +178,11 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput,
 	return doc, nil
 }
 
-// Delete deletes a document, verifying ownership.
-func (s *documentService) Delete(ctx context.Context, id, ownerID string) error {
+// Delete deletes a document
+func (s *documentService) Delete(ctx context.Context, id string) error {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return s.translateError(err, id)
-	}
-	if doc.OwnerID != ownerID {
-		return apperror.Forbidden("document %s not accessible", id)
 	}
 
 	// Delete content from MinIO
@@ -189,19 +205,16 @@ func (s *documentService) Delete(ctx context.Context, id, ownerID string) error 
 	return nil
 }
 
-// List lists documents with pagination, filtered by owner.
-func (s *documentService) List(ctx context.Context, page model.Page, ownerID string) (*model.PageResult, error) {
-	return s.store.Document().ListByOwner(ctx, ownerID, page)
+// List lists documents with pagination
+func (s *documentService) List(ctx context.Context, page model.Page) (*model.PageResult, error) {
+	return s.store.Document().List(ctx, page)
 }
 
-// GetThumbnail retrieves document thumbnail, verifying ownership.
-func (s *documentService) GetThumbnail(ctx context.Context, id, ownerID string) ([]byte, error) {
+// GetThumbnail retrieves document thumbnail
+func (s *documentService) GetThumbnail(ctx context.Context, id string) ([]byte, error) {
 	doc, err := s.store.Document().GetByID(ctx, id)
 	if err != nil {
 		return nil, s.translateError(err, id)
-	}
-	if doc.OwnerID != ownerID {
-		return nil, apperror.Forbidden("document %s not accessible", id)
 	}
 
 	if doc.ThumbnailID == nil || *doc.ThumbnailID == "" {

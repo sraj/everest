@@ -1,0 +1,19 @@
+{
+  "$schema": "https://www.getbifrost.ai/schema",
+  "source_of_truth": "config.json",
+  "config_store": {
+    "enabled": false
+  },
+  "providers": {
+    "openrouter": {
+      "keys": [
+        {
+          "name": "openrouter-key",
+          "value": "env.OPENROUTER_API_KEY",
+          "models": ["*"],
+          "weight": 1.0
+        }
+      ]
+    }
+  }
+}

@@ -1,9 +1,11 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useRef, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { createExtensions } from './extensions'
 import type { PageSizeKey } from './extensions'
 import { Toolbar } from './toolbar/Toolbar'
+import { ContextMenu } from './ContextMenu'
+import { FindReplace } from './FindReplace'
+import { MenuBar } from './MenuBar'
 import './editor.css'
 
 interface EditorProps {
@@ -12,56 +14,12 @@ interface EditorProps {
   editable?: boolean
 }
 
-function ShadowContainer({ children }: { children: React.ReactNode }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const [shadowRoot, setShadowRoot] = useState<ShadowRoot | null>(null)
-
-  useEffect(() => {
-    if (hostRef.current && !hostRef.current.shadowRoot) {
-      const shadow = hostRef.current.attachShadow({ mode: 'open' })
-
-      const sheets: CSSStyleSheet[] = []
-
-      if (document.adoptedStyleSheets.length > 0) {
-        sheets.push(...document.adoptedStyleSheets)
-      }
-
-      for (const styleSheet of document.styleSheets) {
-        try {
-          if (styleSheet.cssRules) {
-            const newSheet = new CSSStyleSheet()
-            const cssText = Array.from(styleSheet.cssRules)
-              .map(rule => rule.cssText)
-              .join('\n')
-            newSheet.replaceSync(cssText)
-            sheets.push(newSheet)
-          }
-        } catch {
-          // Skip cross-origin stylesheets
-        }
-      }
-
-      shadow.adoptedStyleSheets = sheets
-      setShadowRoot(shadow)
-    }
-  }, [])
-
-  return (
-    <div ref={hostRef} className="flex-1 overflow-hidden">
-      {shadowRoot && createPortal(
-        <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-900">
-          {children}
-        </div>,
-        shadowRoot
-      )}
-    </div>
-  )
-}
-
 function EditorInner({ content = '', onChange, editable = true, pageSize, onPageSizeChange }: EditorProps & {
   pageSize: PageSizeKey
   onPageSizeChange: (size: PageSizeKey) => void
 }) {
+  const [pageCount, setPageCount] = useState(1)
+  const [findVisible, setFindVisible] = useState(false)
   const editor = useEditor({
     extensions: createExtensions(pageSize),
     content: content || '',
@@ -79,14 +37,54 @@ function EditorInner({ content = '', onChange, editable = true, pageSize, onPage
     },
   })
 
+  useEffect(() => {
+    if (!editor) return
+    const observer = new MutationObserver(() => {
+      const breaks = editor.view.dom.querySelectorAll('.rm-page-break')
+      setPageCount(breaks.length || 1)
+    })
+    observer.observe(editor.view.dom, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault()
+        setFindVisible(true)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [editor])
+
   if (!editor) return null
 
   return (
-    <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950">
+    <div className="flex flex-col h-full rounded-xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-950 relative">
+      <MenuBar
+        editor={editor}
+        onOpenFind={() => setFindVisible(true)}
+        onInsertTable={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+        onInsertToC={() => {}}
+        onInsertEmoji={() => {}}
+        onInsertSymbol={() => {}}
+        pageSize={pageSize}
+      />
       <Toolbar editor={editor} pageSize={pageSize} onPageSizeChange={onPageSizeChange} />
-      <ShadowContainer>
-        <EditorContent editor={editor} className="h-full" />
-      </ShadowContainer>
+      {findVisible && <FindReplace editor={editor} onClose={() => setFindVisible(false)} />}
+      <div className="flex-1 overflow-hidden">
+        <div className="h-full overflow-y-auto bg-neutral-100 dark:bg-neutral-900">
+          <EditorContent editor={editor} className="h-full" />
+        </div>
+      </div>
+      <div className="border-t border-neutral-200 dark:border-neutral-700 px-4 py-1.5 flex items-center gap-4 text-[11px] text-neutral-400 dark:text-neutral-500">
+        <span>{editor.storage.characterCount?.words?.() ?? 0} words</span>
+        <span>{editor.storage.characterCount?.characters?.() ?? 0} characters</span>
+        <span className="ml-auto">Page {pageCount}</span>
+      </div>
+      <ContextMenu editor={editor} />
     </div>
   )
 }

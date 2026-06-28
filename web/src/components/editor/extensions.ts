@@ -11,6 +11,12 @@ import TaskItem from '@tiptap/extension-task-item'
 import Superscript from '@tiptap/extension-superscript'
 import Subscript from '@tiptap/extension-subscript'
 import Placeholder from '@tiptap/extension-placeholder'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { CharacterCount } from '@tiptap/extension-character-count'
+import { Mathematics } from '@tiptap/extension-mathematics'
 import { PaginationPlus, PAGE_SIZES } from 'tiptap-pagination-plus'
 import type { PageSize } from 'tiptap-pagination-plus'
 export { PAGE_SIZES } from 'tiptap-pagination-plus'
@@ -106,6 +112,14 @@ export function createExtensions(pageSize: PageSizeKey) {
     Placeholder.configure({
       placeholder: 'Start typing...',
     }),
+    Table.configure({
+      resizable: true,
+    }),
+    TableRow,
+    TableCell,
+    TableHeader,
+    CharacterCount,
+    Mathematics,
     PaginationPlus.configure({
       pageGap: 24,
       contentMarginTop: 0,

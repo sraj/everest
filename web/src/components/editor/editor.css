@@ -2,9 +2,8 @@
 
 .tiptap-editor {
   @apply min-h-[500px] px-6 py-4 text-neutral-900 dark:text-neutral-100;
-  @apply focus:outline-none;
   @apply text-base leading-relaxed;
-  @apply m-auto bg-white mt-4;
+  @apply mx-auto bg-white mt-4;
 }
 
 .tiptap-editor:focus-visible {
@@ -233,4 +232,73 @@
 /* Page gap background */
 .rm-page-gap {
   @apply bg-neutral-100 dark:bg-neutral-900;
+}
+
+/* ── Tables ──────────────────────────────────── */
+.tiptap-editor table {
+  border-collapse: collapse;
+  margin: 0;
+  overflow: hidden;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.tiptap-editor table td,
+.tiptap-editor table th {
+  border: 1px solid #d1d5db;
+  box-sizing: border-box;
+  min-width: 1em;
+  padding: 8px 12px;
+  position: relative;
+  vertical-align: top;
+}
+
+.tiptap-editor table th {
+  @apply bg-neutral-100 dark:bg-neutral-800 font-semibold text-left;
+}
+
+.tiptap-editor table .selectedCell:after {
+  background: rgba(59, 130, 246, 0.1);
+  content: '';
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+.tiptap-editor table .column-resize-handle {
+  @apply bg-blue-500;
+  bottom: -2px;
+  position: absolute;
+  right: -2px;
+  top: 0;
+  width: 4px;
+  pointer-events: none;
+}
+
+.tiptap-editor .tableWrapper {
+  overflow-x: auto;
+}
+
+/* ── Table of Contents ──────────────────────────────── */
+.tiptap-editor [data-type="toc"] a {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.tiptap-editor [data-type="toc"] a:hover {
+  text-decoration: underline;
+}
+
+/* ── Columns ─────────────────────────────────────────── */
+.tiptap-editor[data-columns="2"] > .ProseMirror {
+  column-count: 2;
+  column-gap: 32px;
+  column-rule: 1px solid #e5e5e5;
+}
+
+.tiptap-editor[data-columns="3"] > .ProseMirror {
+  column-count: 3;
+  column-gap: 24px;
+  column-rule: 1px solid #e5e5e5;
 }

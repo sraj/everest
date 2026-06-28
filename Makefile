@@ -77,8 +77,8 @@ docker-core:
 
 # Start infrastructure services only (for local backend/frontend dev)
 docker-infra:
-	@echo "Starting infrastructure services (PostgreSQL, MinIO)..."
-	@docker compose up -d --build postgres minio
+	@echo "Starting infrastructure services (PostgreSQL, MinIO, Bifrost)..."
+	@docker compose up -d --build postgres minio bifrost
 
 # Start Zitadel auth services only
 docker-zitadel:
