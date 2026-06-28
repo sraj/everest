@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Editor } from '@tiptap/react'
-import { PAGE_SIZE_LABELS } from '../extensions'
-import type { PageSizeKey } from '../extensions'
+import { PAGE_SIZE_LABELS } from './extensions'
+import type { PageSizeKey } from './extensions'
 
 interface MenuBarProps {
   editor: Editor
