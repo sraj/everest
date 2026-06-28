@@ -125,7 +125,7 @@ export function MenuBar({ editor, onOpenFind, onInsertTable, onInsertToC: _onIns
   return (
     <>
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={imageUpload} />
-      <div className="flex items-center gap-0.5 bg-white px-2 py-0.5 border-b border-neutral-200 dark:bg-neutral-950 dark:border-neutral-800">
+      <div className="flex items-center gap-0.5 bg-white px-2 py-0.5 border-b border-neutral-300 dark:bg-neutral-950 dark:border-neutral-700">
         <Menu label="File" name="file" open={menuOpen === 'file'} onOpen={onOpen}>
           <MenuItem label="Print" shortcut="⌘P" onClick={print} />
           <MenuItem label="Download as HTML" onClick={downloadHTML} />
