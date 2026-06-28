@@ -111,6 +111,7 @@ func (a *App) Run() error {
 	defer pool.Shutdown(30 * time.Second)
 
 	docService := service.NewDocumentService(st, thumbnailSvc, tagger, pool, a.log)
+	profileService := service.NewProfileService(st, a.log)
 
 	var authMiddleware fiber.Handler
 	var bffHandler *auth.BFFHandler
@@ -137,6 +138,7 @@ func (a *App) Run() error {
 	if bffHandler != nil {
 		httpHandler.SetBFFHandler(bffHandler)
 	}
+	httpHandler.SetProfileService(profileService)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
 		return a.db.Ping(ctx)
 	})
