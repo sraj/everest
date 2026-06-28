@@ -200,6 +200,44 @@ c.JSON(doc)
 
 ---
 
+## Background Jobs
+
+Use `jobs.Pool` for all async work. Never use raw `go func()` in services.
+
+```go
+// GOOD — uses worker pool with graceful shutdown and retries
+s.pool.Submit(func(ctx context.Context) error {
+    return s.generateAndSaveThumbnail(ctx, docID, content)
+})
+
+// BAD — raw goroutine, no lifecycle control, no retries
+go s.generateAndSaveThumbnail(context.Background(), docID, content)
+```
+
+### Pool configuration
+```go
+pool := jobs.New(jobs.Config{
+    Workers:     4,     // concurrent goroutines
+    QueueSize:   100,   // buffered jobs before backpressure
+    MaxAttempts: 2,     // retry count for failed 5xx jobs (0 = no retry)
+    Log:         log,
+})
+defer pool.Shutdown(30 * time.Second)  // drain queue before exit
+```
+
+### Retry behavior
+- **Retries** only `5xx` errors — client errors (`4xx`) are never retried.
+- **Backoff**: 500ms, then 1s between attempts.
+- **Max attempts**: configurable, defaults to 2 retries (3 total attempts).
+- **Job timeout**: each job gets a 120-second context deadline.
+
+### Adding a new background job
+1. Inject `*jobs.Pool` into the service constructor.
+2. Call `s.pool.Submit(func(ctx context.Context) error { ... })` in the service method.
+3. Always respect the `ctx` — check `ctx.Err()` for cancellation in long-running work.
+
+---
+
 ## Testing
 
 ### Service tests
