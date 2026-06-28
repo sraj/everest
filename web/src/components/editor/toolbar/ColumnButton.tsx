@@ -23,7 +23,7 @@ export function ColumnButton({ editor }: ColumnButtonProps) {
 
   return (
     <ToolbarButton onClick={cycle} active={cols > 1} title={`Columns: ${cols}`}>
-      <IconColumns size={16} stroke={1.5} />
+      <IconColumns size={20} stroke={1.5} />
       <span className="ml-0.5 text-[10px] font-medium">{cols}</span>
     </ToolbarButton>
   )
