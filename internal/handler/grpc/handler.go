@@ -38,14 +38,6 @@ type documentServer struct {
 	log        *slog.Logger
 }
 
-const defaultOwnerID = "00000000-0000-0000-0000-000000000001"
-
-// ownerFromGRPC extracts the authenticated user's ID from gRPC context.
-// TODO: extract from gRPC metadata when auth interceptor is added.
-func (s *documentServer) ownerFromGRPC(ctx context.Context) string {
-	return defaultOwnerID
-}
-
 func (s *documentServer) Create(ctx context.Context, req *documentsv1.CreateRequest) (*documentsv1.Document, error) {
 	doc, err := s.docService.Create(ctx, service.CreateDocumentInput{
 		Title:       req.Title,
@@ -61,7 +53,7 @@ func (s *documentServer) Create(ctx context.Context, req *documentsv1.CreateRequ
 }
 
 func (s *documentServer) Get(ctx context.Context, req *documentsv1.GetRequest) (*documentsv1.Document, error) {
-	doc, err := s.docService.GetByID(ctx, req.Id, s.ownerFromGRPC(ctx))
+	doc, err := s.docService.GetByID(ctx, req.Id)
 	if err != nil {
 		return nil, toGRPCError(err)
 	}
@@ -69,7 +61,7 @@ func (s *documentServer) Get(ctx context.Context, req *documentsv1.GetRequest) (
 }
 
 func (s *documentServer) GetContent(ctx context.Context, req *documentsv1.GetRequest) (*documentsv1.GetContentResponse, error) {
-	content, err := s.docService.GetContent(ctx, req.Id, s.ownerFromGRPC(ctx))
+	content, err := s.docService.GetContent(ctx, req.Id)
 	if err != nil {
 		return nil, toGRPCError(err)
 	}
@@ -77,7 +69,7 @@ func (s *documentServer) GetContent(ctx context.Context, req *documentsv1.GetReq
 }
 
 func (s *documentServer) List(ctx context.Context, req *documentsv1.ListRequest) (*documentsv1.ListResponse, error) {
-	result, err := s.docService.List(ctx, model.Page{Number: int(req.Page), Size: int(req.PageSize)}, s.ownerFromGRPC(ctx))
+	result, err := s.docService.List(ctx, model.Page{Number: int(req.Page), Size: int(req.PageSize)})
 	if err != nil {
 		return nil, toGRPCError(err)
 	}
@@ -99,7 +91,7 @@ func (s *documentServer) Update(ctx context.Context, req *documentsv1.UpdateRequ
 		ID:      req.Id,
 		Title:   req.Title,
 		Content: req.Content,
-	}, s.ownerFromGRPC(ctx))
+	})
 	if err != nil {
 		s.log.Error("grpc: failed to update document", "error", err.Error())
 		return nil, toGRPCError(err)
@@ -108,14 +100,14 @@ func (s *documentServer) Update(ctx context.Context, req *documentsv1.UpdateRequ
 }
 
 func (s *documentServer) Delete(ctx context.Context, req *documentsv1.DeleteRequest) (*emptypb.Empty, error) {
-	if err := s.docService.Delete(ctx, req.Id, s.ownerFromGRPC(ctx)); err != nil {
+	if err := s.docService.Delete(ctx, req.Id); err != nil {
 		return nil, toGRPCError(err)
 	}
 	return &emptypb.Empty{}, nil
 }
 
 func (s *documentServer) GetThumbnail(ctx context.Context, req *documentsv1.GetRequest) (*documentsv1.GetThumbnailResponse, error) {
-	thumbnail, err := s.docService.GetThumbnail(ctx, req.Id, s.ownerFromGRPC(ctx))
+	thumbnail, err := s.docService.GetThumbnail(ctx, req.Id)
 	if err != nil {
 		return nil, toGRPCError(err)
 	}

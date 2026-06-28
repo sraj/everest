@@ -33,7 +33,7 @@ type sessionCookie struct {
 func newSessionCookie(secret string, log *slog.Logger) *sessionCookie {
 	key := []byte(secret)
 	return &sessionCookie{
-		sc:  gorilla.New(key),
+		sc:  gorilla.New(key, nil),
 		log: log,
 	}
 }
