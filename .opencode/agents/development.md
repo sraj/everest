@@ -43,6 +43,28 @@ web/                          # React frontend (Vite + TypeScript)
 
 ## Code Organization Rules
 
+### Constructor patterns
+All injectable dependencies **must** be injected as interfaces, never concrete types.
+
+```go
+// GOOD — constructors return interfaces
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, ...) DocumentService
+func NewTagger(cfg TaggerConfig, st store.Store, log *slog.Logger) TaggerService
+func NewThumbnailService(config ThumbnailConfig, log *slog.Logger) ThumbnailService
+func NewDocumentStore(db *dbx.DB) store.DocumentStore
+func NewContentStore(cfg Config) (store.ContentStore, error)
+func New(doc, content, closer, pinger) Store
+
+// OK — concrete for non-injectables (transport, infrastructure)
+func New(docService service.DocumentService, log *slog.Logger) *Handler   // handler
+func New(cfg Config) *Pool                                                 // job pool
+```
+
+### Interface definition location
+- **Service interfaces**: defined in the same file as their implementation (e.g., `DocumentService` in `document.go`)
+- **Store interfaces**: defined in `internal/store/` (centralized)
+- **Models**: no interfaces, pure data types in `internal/domain/model/`
+
 ### Package dependency direction
 ```
 handler → service → store ← infrastructure

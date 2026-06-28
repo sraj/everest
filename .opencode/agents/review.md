@@ -12,9 +12,22 @@ Every PR must pass these checks. Reviewers: confirm each item.
   ```
   Should produce no output.
 
+- [ ] **Layer isolation — no reverse dependencies**:
+  ```bash
+  # Handlers must NOT import store/ or datastore/ directly
+  grep -r "internal/store\|internal/datastore" internal/handler/ --include="*.go"
+  
+  # Services must NOT import datastore/ or handler/
+  grep -r "internal/datastore\|internal/handler" internal/service/ --include="*.go"
+  
+  # domain/model must NOT import anything from internal/ except model itself
+  grep -r "internal/" internal/domain/model/ --include="*.go" | grep -v "model"
+  ```
+  All should produce no output.
+
 - [ ] **No handler calls store directly** — handlers call services, never `store.Store()`.
 - [ ] **No domain/model imports other internal packages** — model types are dependency-free.
-- [ ] **Infrastructure packages only import `store/` and `domain/model/`** — never import `service/` or `handler/`.
+- [ ] **Constructors return interfaces** for injectable dependencies (services, stores). Concrete types are acceptable for transport handlers and infrastructure pools.
 
 ---
 
