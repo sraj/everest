@@ -10,6 +10,8 @@ import { LineSpacingDropdown } from './LineSpacingDropdown'
 import { HeadingDropdown } from './HeadingDropdown'
 import { EmojiPopover } from './EmojiPopover'
 import { SymbolPopover } from './SymbolPopover'
+import { ToCButton } from './ToCButton'
+import { ColumnButton } from './ColumnButton'
 import { ALL_PAGE_SIZES } from '../extensions'
 import type { PageSizeKey } from '../extensions'
 import {
@@ -186,6 +188,8 @@ export function Toolbar({ editor, pageSize, onPageSizeChange }: ToolbarProps) {
         <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal rule">
           <HorizontalRule />
         </ToolbarButton>
+        <ToCButton editor={editor} />
+        <ColumnButton editor={editor} />
 
         <ToolbarDivider />
 

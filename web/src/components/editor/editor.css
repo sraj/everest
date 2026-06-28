@@ -279,3 +279,26 @@
 .tiptap-editor .tableWrapper {
   overflow-x: auto;
 }
+
+/* ── Table of Contents ──────────────────────────────── */
+.tiptap-editor [data-type="toc"] a {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.tiptap-editor [data-type="toc"] a:hover {
+  text-decoration: underline;
+}
+
+/* ── Columns ─────────────────────────────────────────── */
+.tiptap-editor[data-columns="2"] > .ProseMirror {
+  column-count: 2;
+  column-gap: 32px;
+  column-rule: 1px solid #e5e5e5;
+}
+
+.tiptap-editor[data-columns="3"] > .ProseMirror {
+  column-count: 3;
+  column-gap: 24px;
+  column-rule: 1px solid #e5e5e5;
+}
