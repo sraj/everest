@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Editor } from '@tiptap/react'
 import { ToolbarButton } from './ToolbarButton'
-import { Columns3 } from '../icons'
+import { Columns3 } from 'lucide-react'
 
 interface ColumnButtonProps {
   editor: Editor
