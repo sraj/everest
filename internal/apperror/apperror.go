@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/sraj/everest/pkg/bind"
 )
 
 // AppError is a structured application error with a machine-readable kind
@@ -65,16 +66,14 @@ func Wrap(err error, status int, kind, format string, args ...any) *AppError {
 }
 
 // ValidationError converts validator.ValidationErrors into a 422 AppError
-// with per-field error details.
+// with per-field human-readable error messages.
 func ValidationError(err error) *AppError {
 	var ve validator.ValidationErrors
 	if errors.As(err, &ve) {
 		fields := make(map[string]any, len(ve))
-		for _, fe := range ve {
-			fields[fe.Field()] = map[string]string{
-				"tag":   fe.Tag(),
-				"param": fe.Param(),
-			}
+		msgs := bind.HumanizeError(err)
+		for field, msg := range msgs {
+			fields[field] = msg
 		}
 		return &AppError{
 			Status:  http.StatusUnprocessableEntity,

@@ -197,6 +197,66 @@ if err := bindQuery(c, &q); err != nil {
 }
 ```
 
+### Custom validators (domain-specific rules)
+
+Register custom tags in `init()`:
+```go
+func init() {
+    bind.RegisterValidation("doctitle", func(fl validator.FieldLevel) bool {
+        return fl.Field().String() != "Untitled Document"
+    })
+}
+
+// Usage
+type CreateRequest struct {
+    Title string `json:"title" validate:"required,doctitle,max=500"`
+}
+```
+
+### Struct-level validation (cross-field rules)
+
+For business logic spanning multiple fields:
+```go
+type SignupRequest struct {
+    Password        string `json:"password" validate:"required,min=8"`
+    PasswordConfirm string `json:"password_confirm" validate:"required,eqfield=Password"`
+}
+```
+
+For complex cross-field logic, use `bind.RegisterStructValidation()`:
+```go
+type DateRange struct {
+    From time.Time `json:"from" validate:"required"`
+    To   time.Time `json:"to" validate:"required"`
+}
+
+func init() {
+    bind.RegisterStructValidation(func(sl validator.StructLevel) {
+        r := sl.Current().Interface().(DateRange)
+        if r.To.Before(r.From) {
+            sl.ReportError(r.To, "To", "to", "gtfield", "From")
+        }
+    }, DateRange{})
+}
+```
+
+### Validation error format
+
+Errors return HTTP 422 with human-readable per-field messages:
+```json
+{
+    "kind": "validation",
+    "message": "validation failed",
+    "data": {
+        "Title": "is required",
+        "Email": "must be a valid email address",
+        "PasswordConfirm": "must match Password"
+    }
+}
+```
+
+`pkg/bind.HumanizeError()` maps common tags (`required`, `min`, `max`, `email`, `uuid`) to readable messages. Register custom tags to have them appear as-is or extend `msgForTag()`.
+
 ---
 
 ## API Response Types
