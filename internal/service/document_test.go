@@ -125,7 +125,7 @@ func TestDocumentService_Create(t *testing.T) {
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	doc, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "My Doc",
@@ -149,7 +149,7 @@ func TestDocumentService_Create_ContentTypeDefaults(t *testing.T) {
 	docStore := &mockDocumentRepo{
 		createFn: func(ctx context.Context, doc *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -167,7 +167,7 @@ func TestDocumentService_Create_ContentSaveFails(t *testing.T) {
 		},
 	}
 	docStore := &mockDocumentRepo{}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -189,7 +189,7 @@ func TestDocumentService_Create_DocCreateFails_ContentCleanup(t *testing.T) {
 			return errors.New("db constraint")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -228,7 +228,7 @@ func TestDocumentService_Create_WithThumbnail(t *testing.T) {
 		},
 		updateFn: func(ctx context.Context, doc *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), thumbSvc, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), thumbSvc, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -284,7 +284,7 @@ func TestDocumentService_GetContent(t *testing.T) {
 			return doc, nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetContent(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -320,7 +320,7 @@ func TestDocumentService_Update(t *testing.T) {
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	result, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:      doc.ID,
@@ -339,7 +339,7 @@ func TestDocumentService_Update_TitleOnly(t *testing.T) {
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		updateFn: func(ctx context.Context, d *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	result, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:    doc.ID,
@@ -374,7 +374,7 @@ func TestDocumentService_Update_ContentSaveFails(t *testing.T) {
 	docStore := &mockDocumentRepo{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:      doc.ID,
@@ -399,7 +399,7 @@ func TestDocumentService_Delete(t *testing.T) {
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -423,7 +423,7 @@ func TestDocumentService_Delete_WithThumbnail(t *testing.T) {
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -442,7 +442,7 @@ func TestDocumentService_Delete_ContentDeleteFails(t *testing.T) {
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -497,7 +497,7 @@ func TestDocumentService_GetThumbnail(t *testing.T) {
 	docStore := &mockDocumentRepo{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetThumbnail(context.Background(), doc.ID)
 	require.NoError(t, err)

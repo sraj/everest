@@ -13,6 +13,7 @@ import (
 	"github.com/sraj/everest/internal/datastore/minio"
 	"github.com/sraj/everest/internal/datastore/postgres"
 	"github.com/sraj/everest/internal/service"
+	"github.com/sraj/everest/internal/jobs"
 	"github.com/sraj/everest/internal/store"
 	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
@@ -103,7 +104,10 @@ func (a *App) Run() error {
 	tagger := service.NewTagger(service.DefaultTaggerConfig(), st, a.log)
 	defer tagger.Close()
 
-	docService := service.NewDocumentService(st, thumbnailSvc, tagger, a.log)
+	pool := jobs.New(jobs.DefaultConfig(a.log))
+	defer pool.Shutdown(30 * time.Second)
+
+	docService := service.NewDocumentService(st, thumbnailSvc, tagger, pool, a.log)
 
 	httpHandler := handlerhttp.New(docService, a.log)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {

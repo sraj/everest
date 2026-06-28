@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
+	"github.com/sraj/everest/internal/jobs"
 	"github.com/sraj/everest/internal/store"
 )
 
@@ -27,15 +29,17 @@ type documentService struct {
 	store        store.Store
 	thumbnailSvc ThumbnailService
 	tagger       *tagger
+	pool         *jobs.Pool
 	log          *slog.Logger
 }
 
 // NewDocumentService creates a new document service.
-func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, tagger *tagger, log *slog.Logger) DocumentService {
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, tagger *tagger, pool *jobs.Pool, log *slog.Logger) DocumentService {
 	return &documentService{
 		store:        st,
 		thumbnailSvc: thumbnailSvc,
 		tagger:       tagger,
+		pool:         pool,
 		log:          log,
 	}
 }
@@ -83,12 +87,18 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 
 	// Generate thumbnail asynchronously after document exists in DB
 	if s.thumbnailSvc != nil && len(input.Content) > 0 {
-		go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
+		s.pool.Submit(func(ctx context.Context) error {
+			s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
+			return nil
+		})
 	}
 
 	// Generate tags asynchronously
 	if s.tagger != nil {
-		go s.tagger.GenerateAndSaveTags(context.Background(), doc.ID, input.Content)
+		s.pool.Submit(func(ctx context.Context) error {
+			s.tagger.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+			return nil
+		})
 	}
 
 	return doc, nil
@@ -136,12 +146,18 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 
 		// Regenerate thumbnail asynchronously when content changes
 		if s.thumbnailSvc != nil && len(input.Content) > 0 {
-			go s.generateAndSaveThumbnail(context.Background(), doc.ID, input.Content)
+			s.pool.Submit(func(ctx context.Context) error {
+				s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
+				return nil
+			})
 		}
 
 		// Regenerate tags when content changes
 		if s.tagger != nil {
-			go s.tagger.GenerateAndSaveTags(context.Background(), doc.ID, input.Content)
+			s.pool.Submit(func(ctx context.Context) error {
+				s.tagger.GenerateAndSaveTags(ctx, doc.ID, input.Content)
+				return nil
+			})
 		}
 	}
 
