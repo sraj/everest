@@ -14,6 +14,8 @@ import (
 	"github.com/sraj/everest/internal/store"
 )
 
+var htmlPolicy = bluemonday.UGCPolicy()
+
 // DocumentService defines the interface for document business logic
 type DocumentService interface {
 	Create(ctx context.Context, input CreateDocumentInput) (*model.Document, error)
@@ -63,7 +65,8 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	if contentType == "" {
 		contentType = "text/html"
 	}
-	if err := s.store.Content().Save(ctx, contentID, input.Content, contentType); err != nil {
+	sanitized := htmlPolicy.SanitizeBytes(input.Content)
+	if err := s.store.Content().Save(ctx, contentID, sanitized, contentType); err != nil {
 		s.log.Error("failed to save document content", "error", err.Error())
 		return nil, err
 	}
@@ -139,7 +142,8 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 
 	// Update content in MinIO
 	if input.Content != nil {
-		if err := s.store.Content().Save(ctx, doc.ContentID, input.Content, "text/html"); err != nil {
+		sanitized := htmlPolicy.SanitizeBytes(input.Content)
+		if err := s.store.Content().Save(ctx, doc.ContentID, sanitized, "text/html"); err != nil {
 			s.log.Error("failed to update document content", "error", err.Error())
 			return nil, err
 		}
