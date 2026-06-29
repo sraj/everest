@@ -76,9 +76,10 @@ func (t *taggerService) callAI(ctx context.Context, text string) (model.Tags, er
 			{"role": "user", "content": "Document content:\n\n" + text},
 		},
 		"temperature":     0.3,
-		"max_completion_tokens": 200,
+		"max_completion_tokens": 500,
 		"seed":             42,
 		"response_format":  map[string]string{"type": "json_object"},
+		"reasoning":        map[string]any{"effort": "low"},
 	}
 
 	body, err := json.Marshal(reqBody)
