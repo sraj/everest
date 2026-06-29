@@ -10,7 +10,7 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/internal/jobs"
+	"github.com/sraj/everest/pkg/jobs"
 	"github.com/sraj/everest/internal/store"
 )
 

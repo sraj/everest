@@ -1,20 +1,20 @@
+// Package jobs provides a generic background worker pool with retry support.
+// It has zero dependencies on any specific project and can be reused
+// across services.
 package jobs
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"sync"
 	"time"
-
-	"github.com/sraj/everest/internal/apperror"
 )
 
 // Job is a background task that receives a context and returns an error.
 type Job func(ctx context.Context) error
 
 // Pool manages a fixed number of workers that process jobs from a queue.
-// It supports graceful shutdown with a configurable drain timeout.
+// Supports graceful shutdown with a configurable drain timeout.
 type Pool struct {
 	queue       chan Job
 	wg          sync.WaitGroup
@@ -22,14 +22,16 @@ type Pool struct {
 	cancel      context.CancelFunc
 	log         *slog.Logger
 	maxAttempts int
+	shouldRetry func(error) bool
 }
 
 // Config holds pool settings.
 type Config struct {
-	Workers    int // number of goroutines processing jobs
-	QueueSize  int // buffered queue capacity
-	MaxAttempts int // retry count for failed jobs (0 = no retry)
-	Log        *slog.Logger
+	Workers     int              // number of goroutines processing jobs
+	QueueSize   int              // buffered queue capacity
+	MaxAttempts int              // retry count for failed jobs (0 = no retry)
+	ShouldRetry func(error) bool // nil = retry all errors
+	Log         *slog.Logger
 }
 
 // DefaultConfig returns sensible defaults.
@@ -51,6 +53,7 @@ func New(cfg Config) *Pool {
 		cancel:      cancel,
 		log:         cfg.Log,
 		maxAttempts: cfg.MaxAttempts,
+		shouldRetry: cfg.ShouldRetry,
 	}
 	for i := 0; i < cfg.Workers; i++ {
 		p.wg.Add(1)
@@ -92,7 +95,6 @@ func (p *Pool) worker(id int) {
 		case job := <-p.queue:
 			p.runJob(job, 0)
 		case <-p.ctx.Done():
-			// Drain remaining jobs before exiting.
 			for {
 				select {
 				case job := <-p.queue:
@@ -114,9 +116,7 @@ func (p *Pool) runJob(job Job, attempt int) {
 		return
 	}
 
-	// Don't retry validation/user errors.
-	var ae *apperror.AppError
-	if errors.As(err, &ae) && ae.Status >= 400 && ae.Status < 500 {
+	if p.shouldRetry != nil && !p.shouldRetry(err) {
 		return
 	}
 

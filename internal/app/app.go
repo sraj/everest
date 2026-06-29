@@ -2,20 +2,23 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/sraj/everest/internal/config"
 	handlerhttp "github.com/sraj/everest/internal/handler/http"
 	handlergrpc "github.com/sraj/everest/internal/handler/grpc"
+	"github.com/sraj/everest/internal/auth"
+	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/datastore/minio"
 	"github.com/sraj/everest/internal/datastore/postgres"
 	"github.com/sraj/everest/internal/service"
-	"github.com/sraj/everest/internal/jobs"
+	"github.com/sraj/everest/pkg/jobs"
 	"github.com/sraj/everest/internal/store"
-	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
 	"github.com/sraj/everest/pkg/logger"
 	"github.com/sraj/everest/pkg/server"
@@ -104,7 +107,19 @@ func (a *App) Run() error {
 	tagger := service.NewTagger(service.DefaultTaggerConfig(), a.log)
 	defer tagger.Close()
 
-	pool := jobs.New(jobs.DefaultConfig(a.log))
+	pool := jobs.New(jobs.Config{
+		Workers:     4,
+		QueueSize:   100,
+		MaxAttempts: 2,
+		ShouldRetry: func(err error) bool {
+			var ae *apperror.AppError
+			if errors.As(err, &ae) && ae.Status >= 400 && ae.Status < 500 {
+				return false
+			}
+			return true
+		},
+		Log: a.log,
+	})
 	defer pool.Shutdown(30 * time.Second)
 
 	docService := service.NewDocumentService(st, thumbnailSvc, tagger, pool, a.log)
