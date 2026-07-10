@@ -22,7 +22,11 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
-	GRPCPort       string
+
+	ChromaEndpoint   string
+	ChromaCollection string
+
+	GRPCPort string
 }
 
 var validLogLevels = map[string]bool{
@@ -77,8 +81,10 @@ func Load() (*Config, error) {
 		MinIOAccessKey: l.String("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey: l.String("MINIO_SECRET_KEY", "minioadmin"),
 		MinIOBucket:    l.String("MINIO_BUCKET", "documents"),
-		MinIOUseSSL:    l.Bool("MINIO_USE_SSL", false),
-		GRPCPort:       l.String("GRPC_PORT", ""),
+		MinIOUseSSL:       l.Bool("MINIO_USE_SSL", false),
+		ChromaEndpoint:    l.String("CHROMA_ENDPOINT", "http://localhost:8000"),
+		ChromaCollection:  l.String("CHROMA_COLLECTION", "everest_documents"),
+		GRPCPort:          l.String("GRPC_PORT", ""),
 	}
 
 	if err := cfg.Validate(); err != nil {

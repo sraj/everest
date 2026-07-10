@@ -7,6 +7,7 @@ A Google Docs-like document management platform with rich text editing, AI-power
 ## Features
 
 - **Rich text editor** — TipTap with pagination, headings, tables, fonts, and task lists
+- **RAG-powered chat** — Ask questions about your documents with AI-powered retrieval-augmented generation via OpenRouter + ChromaDB
 - **AI-powered tagging** — Auto-generates document tags via OpenRouter + Nemotron 3 Ultra (free, open-source)
 - **Thumbnail generation** — Google Docs-style previews via headless Chrome (chromedp)
 - **OpenAPI documentation** — Auto-generated from `.proto` files served at `/api/docs/openapi.json`
@@ -250,14 +251,18 @@ everest/
 │   ├── store/                # Data access interfaces (ports)
 │   │   ├── document.go       #   DocumentStore
 │   │   ├── content.go        #   ContentStore
+│   │   ├── embedding.go      #   VectorStore (ChromaDB)
 │   │   ├── profile.go        #   UserProfileStore
 │   │   └── errors.go         #   ErrNotFound, ErrConflict
 │   ├── domain/model/         # Domain entities + value objects
 │   ├── datastore/            # Data access implementations (adapters)
 │   │   ├── postgres/         #   PostgreSQL-backed stores
-│   │   └── minio/            #   MinIO-backed content store
+│   │   ├── minio/            #   MinIO-backed content store
+│   │   └── chroma/           #   ChromaDB vector store
 │   ├── service/              # Business logic
 │   │   ├── document.go       #   DocumentService
+│   │   ├── chat.go           #   ChatService (RAG + LLM completions)
+│   │   ├── embedding.go      #   Embedding generation
 │   │   ├── tagger.go         #   AI-powered tagging
 │   │   └── thumbnail.go      #   Thumbnail generation
 │   ├── handler/
@@ -288,8 +293,9 @@ handler → service → store ← datastore
 ```
 
 - **Handlers** call services, never the store directly
-- **Services** call `store.Document()`, `store.Content()`, `store.Profile()` accessors
-- **Store** defines interfaces. `datastore/` implements them (PostgreSQL, MinIO)
+- **Services** call `store.Document()`, `store.Content()`, `store.Profile()`, `store.Vector()` accessors
+- **Store** defines interfaces. `datastore/` implements them (PostgreSQL, MinIO, ChromaDB)
+- **RAG pipeline**: `ChatService → EmbeddingService → VectorStore.Query → LLM completion` with graceful fallback to direct LLM when retrieval fails
 - **`pkg/`** packages have zero `internal/` imports — extractable to shared module
 - **`domain/model/`** has zero dependencies on other internal packages
 
@@ -333,9 +339,14 @@ See `.env.example` for all available configuration options:
 | `MINIO_BUCKET` | MinIO bucket name | `documents` |
 | `MINIO_USE_SSL` | Use SSL for MinIO | `false` |
 | `GRPC_PORT` | gRPC server port (empty to disable) | `""` |
+| `BIFROST_ENDPOINT` | Bifrost AI gateway base URL (used by tagger + embeddings) | `http://localhost:8081` |
 | `AI_TAGGER_ENABLED` | Enable AI tag generation | `false` |
 | `AI_TAGGER_MODEL` | Model string for AI tagging | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` |
-| `AI_TAGGER_ENDPOINT` | AI gateway endpoint | `http://localhost:8081/v1/chat/completions` |
+| `LLM_MODEL` | Model string for chat/RAG completions | `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free` |
+| `EMBEDDING_ENABLED` | Enable vector embedding generation | `false` |
+| `EMBEDDING_MODEL` | Model string for embeddings | `openai/text-embedding-3-small` |
+| `CHROMA_ENDPOINT` | ChromaDB server URL | `http://localhost:8000` |
+| `CHROMA_COLLECTION` | ChromaDB collection name | `everest_documents` |
 | `OPENROUTER_API_KEY` | OpenRouter API key (for Bifrost + AI tagging) | - |
 
 ## API Endpoints
@@ -351,6 +362,52 @@ See `.env.example` for all available configuration options:
 | `DELETE` | `/api/v1/documents/:id` | Delete a document |
 | `GET` | `/api/v1/documents/:id/download` | Download document content |
 | `GET` | `/api/v1/documents/:id/thumbnail` | Get document thumbnail |
+| `POST` | `/api/chat/messages` | Send a chat message (JSON response) |
+| `GET` | `/api/chat/stream` | SSE connection for real-time chat streaming |
+
+### Chat API
+
+The chat widget uses the **fetch-sse** protocol (POST + streaming response):
+
+1. Opens an EventSource connection to `GET /api/chat/stream`
+2. Sends messages via `POST /api/chat/messages` with `Accept: text/event-stream`
+3. Receives streaming SSE events through the POST response
+
+Two response modes are supported on `/api/chat/messages`:
+
+**JSON (default):** Returns the complete AI response with citations.
+
+```bash
+curl -X POST http://localhost:8080/api/chat/messages \
+  -H "Content-Type: application/json" \
+  -d '{"content": "What documents do I have about Kubernetes?"}'
+```
+
+Response:
+```json
+{
+  "response": {
+    "role": "assistant",
+    "content": "You have 3 documents about Kubernetes...",
+    "metadata": {
+      "citations": [
+        {"title": "K8s Setup Guide", "snippet": "...", "score": 0.92}
+      ]
+    }
+  }
+}
+```
+
+**SSE streaming (fetch-sse):** Set `Accept: text/event-stream` to receive tokens in real time.
+
+```bash
+curl -X POST http://localhost:8080/api/chat/messages \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{"content": "Summarize my documents"}'
+```
+
+SSE events: `citations` → `token` (per-token) → `done`. Errors are sent as `event: error`.
 
 ### Health Check Response
 

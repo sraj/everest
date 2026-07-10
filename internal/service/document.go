@@ -10,8 +10,8 @@ import (
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/domain/model"
-	"github.com/sraj/everest/pkg/jobs"
 	"github.com/sraj/everest/internal/store"
+	"github.com/sraj/everest/pkg/jobs"
 )
 
 var htmlPolicy = bluemonday.UGCPolicy()
@@ -31,16 +31,18 @@ type documentService struct {
 	store        store.Store
 	thumbnailSvc ThumbnailService
 	taggerSvc    TaggerService
+	embeddingSvc EmbeddingService
 	pool         *jobs.Pool
 	log          *slog.Logger
 }
 
 // NewDocumentService creates a new document service.
-func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, taggerSvc TaggerService, pool *jobs.Pool, log *slog.Logger) DocumentService {
+func NewDocumentService(st store.Store, thumbnailSvc ThumbnailService, taggerSvc TaggerService, embeddingSvc EmbeddingService, pool *jobs.Pool, log *slog.Logger) DocumentService {
 	return &documentService{
 		store:        st,
 		thumbnailSvc: thumbnailSvc,
 		taggerSvc:    taggerSvc,
+		embeddingSvc: embeddingSvc,
 		pool:         pool,
 		log:          log,
 	}
@@ -89,7 +91,7 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	}
 
 	// Generate thumbnail asynchronously after document exists in DB
-	if s.thumbnailSvc != nil && len(input.Content) > 0 {
+	if s.thumbnailSvc != nil && s.pool != nil && len(input.Content) > 0 {
 		s.pool.Submit(func(ctx context.Context) error {
 			s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
 			return nil
@@ -97,9 +99,17 @@ func (s *documentService) Create(ctx context.Context, input CreateDocumentInput)
 	}
 
 	// Generate tags asynchronously
-	if s.taggerSvc != nil {
+	if s.taggerSvc != nil && s.pool != nil {
 		s.pool.Submit(func(ctx context.Context) error {
 			s.generateAndSaveTags(ctx, doc.ID, input.Content)
+			return nil
+		})
+	}
+
+	// Generate embedding asynchronously
+	if s.embeddingSvc != nil && s.pool != nil {
+		s.pool.Submit(func(ctx context.Context) error {
+			s.generateAndSaveEmbedding(ctx, doc.ID, input.Title, sanitized)
 			return nil
 		})
 	}
@@ -149,7 +159,7 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 		}
 
 		// Regenerate thumbnail asynchronously when content changes
-		if s.thumbnailSvc != nil && len(input.Content) > 0 {
+		if s.thumbnailSvc != nil && len(input.Content) > 0 && s.pool != nil {
 			s.pool.Submit(func(ctx context.Context) error {
 				s.generateAndSaveThumbnail(ctx, doc.ID, input.Content)
 				return nil
@@ -157,9 +167,17 @@ func (s *documentService) Update(ctx context.Context, input UpdateDocumentInput)
 		}
 
 		// Regenerate tags when content changes
-		if s.taggerSvc != nil {
+		if s.taggerSvc != nil && s.pool != nil {
 			s.pool.Submit(func(ctx context.Context) error {
 				s.generateAndSaveTags(ctx, doc.ID, input.Content)
+				return nil
+			})
+		}
+
+		// Regenerate embedding when content changes
+		if s.embeddingSvc != nil && s.pool != nil {
+			s.pool.Submit(func(ctx context.Context) error {
+				s.generateAndSaveEmbedding(ctx, doc.ID, doc.Title, sanitized)
 				return nil
 			})
 		}
@@ -197,6 +215,12 @@ func (s *documentService) Delete(ctx context.Context, id string) error {
 			s.log.Error("failed to delete document thumbnail", "error", err.Error())
 			// Continue with document deletion
 		}
+	}
+
+	// Delete embedding from ChromaDB
+	if err := s.store.Vector().Delete(ctx, id); err != nil {
+		s.log.Error("failed to delete document embedding", "error", err.Error())
+		// Continue with document deletion
 	}
 
 	if err := s.store.Document().Delete(ctx, id); err != nil {
@@ -292,6 +316,30 @@ func (s *documentService) generateAndSaveTags(ctx context.Context, docID string,
 	}
 
 	s.log.Info("tags generated", "doc_id", docID, "tags", tags)
+}
+
+// generateAndSaveEmbedding generates a vector embedding and stores it in ChromaDB.
+func (s *documentService) generateAndSaveEmbedding(ctx context.Context, docID, title string, content []byte) {
+	embedding, _, err := s.embeddingSvc.Generate(ctx, content)
+	if err != nil {
+		s.log.Error("failed to generate embedding", "error", err.Error(), "doc_id", docID)
+		return
+	}
+	if len(embedding) == 0 {
+		return
+	}
+
+	metadata := map[string]string{
+		"title":  title,
+		"doc_id": docID,
+	}
+
+	if err := s.store.Vector().Upsert(ctx, docID, content, embedding, metadata); err != nil {
+		s.log.Error("failed to save embedding", "error", err.Error(), "doc_id", docID)
+		return
+	}
+
+	s.log.Info("embedding saved", "doc_id", docID, "dimensions", len(embedding))
 }
 
 func (s *documentService) translateError(err error, id string) error {

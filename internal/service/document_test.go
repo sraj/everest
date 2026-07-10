@@ -16,6 +16,7 @@ import (
 
 	"github.com/sraj/everest/internal/domain/model"
 	"github.com/sraj/everest/internal/store"
+	"github.com/sraj/everest/pkg/jobs"
 )
 
 func docSvcLogger() *slog.Logger {
@@ -80,6 +81,51 @@ func (m *mockContentStore) Delete(ctx context.Context, key string) error {
 func noopClose() error                       { return nil }
 func noopPing(_ context.Context) error       { return nil }
 
+type mockVectorStore struct {
+	upsertFn          func(ctx context.Context, documentID string, content []byte, embedding []float64, metadata map[string]string) error
+	getByDocumentIDFn func(ctx context.Context, documentID string) ([]float64, error)
+	queryFn           func(ctx context.Context, embedding []float64, topK int) ([]store.QueryResult, error)
+	deleteFn          func(ctx context.Context, documentID string) error
+	closeFn           func() error
+}
+
+func (m *mockVectorStore) Upsert(ctx context.Context, documentID string, content []byte, embedding []float64, metadata map[string]string) error {
+	if m.upsertFn != nil {
+		return m.upsertFn(ctx, documentID, content, embedding, metadata)
+	}
+	return nil
+}
+
+func (m *mockVectorStore) GetByDocumentID(ctx context.Context, documentID string) ([]float64, error) {
+	if m.getByDocumentIDFn != nil {
+		return m.getByDocumentIDFn(ctx, documentID)
+	}
+	return nil, store.ErrNotFound{Resource: "embedding", ID: documentID}
+}
+
+func (m *mockVectorStore) Query(ctx context.Context, embedding []float64, topK int) ([]store.QueryResult, error) {
+	if m.queryFn != nil {
+		return m.queryFn(ctx, embedding, topK)
+	}
+	return nil, nil
+}
+
+func (m *mockVectorStore) Delete(ctx context.Context, documentID string) error {
+	if m.deleteFn != nil {
+		return m.deleteFn(ctx, documentID)
+	}
+	return nil
+}
+
+func (m *mockVectorStore) Close() error {
+	if m.closeFn != nil {
+		return m.closeFn()
+	}
+	return nil
+}
+
+var noopVectorStore = &mockVectorStore{}
+
 type mockThumbnailSvc struct {
 	mu                sync.Mutex
 	generateFn        func(ctx context.Context, html []byte) ([]byte, error)
@@ -118,14 +164,14 @@ func TestDocumentService_Create(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		createFn: func(ctx context.Context, doc *model.Document) error {
 			assert.NotEmpty(t, doc.ID)
 			assert.Equal(t, "My Doc", doc.Title)
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	doc, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "My Doc",
@@ -146,10 +192,10 @@ func TestDocumentService_Create_ContentTypeDefaults(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		createFn: func(ctx context.Context, doc *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -166,8 +212,8 @@ func TestDocumentService_Create_ContentSaveFails(t *testing.T) {
 			return errors.New("minio down")
 		},
 	}
-	docStore := &mockDocumentRepo{}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	docStore := &mockDocumentStore{}
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -184,12 +230,12 @@ func TestDocumentService_Create_DocCreateFails_ContentCleanup(t *testing.T) {
 		saveFn:   func(ctx context.Context, key string, content []byte, contentType string) error { return nil },
 		deleteFn: func(ctx context.Context, key string) error { contentDeleted = key; return nil },
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		createFn: func(ctx context.Context, doc *model.Document) error {
 			return errors.New("db constraint")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -214,7 +260,7 @@ func TestDocumentService_Create_WithThumbnail(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		createFn: func(ctx context.Context, doc *model.Document) error { return nil },
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return &model.Document{
@@ -228,7 +274,10 @@ func TestDocumentService_Create_WithThumbnail(t *testing.T) {
 		},
 		updateFn: func(ctx context.Context, doc *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), thumbSvc, nil, nil, docSvcLogger())
+	pool := jobs.New(jobs.Config{Workers: 2, QueueSize: 10, MaxAttempts: 1, Log: docSvcLogger()})
+	defer pool.Shutdown(5 * time.Second)
+
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), thumbSvc, nil, nil, pool, docSvcLogger())
 
 	_, err := svc.Create(context.Background(), CreateDocumentInput{
 		Title:   "Doc",
@@ -247,12 +296,12 @@ func TestDocumentService_Create_WithThumbnail(t *testing.T) {
 
 func TestDocumentService_GetByID(t *testing.T) {
 	expected := sampleDocument()
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return expected, nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	doc, err := svc.GetByID(context.Background(), expected.ID)
 	require.NoError(t, err)
@@ -260,12 +309,12 @@ func TestDocumentService_GetByID(t *testing.T) {
 }
 
 func TestDocumentService_GetByID_NotFound(t *testing.T) {
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return nil, errors.New("not found")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.GetByID(context.Background(), "missing")
 	require.Error(t, err)
@@ -279,12 +328,12 @@ func TestDocumentService_GetContent(t *testing.T) {
 			return []byte("<p>content</p>"), nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return doc, nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetContent(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -292,12 +341,12 @@ func TestDocumentService_GetContent(t *testing.T) {
 }
 
 func TestDocumentService_GetContent_DocNotFound(t *testing.T) {
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return nil, errors.New("not found")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.GetContent(context.Background(), "missing")
 	require.Error(t, err)
@@ -311,7 +360,7 @@ func TestDocumentService_Update(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return doc, nil
 		},
@@ -320,7 +369,7 @@ func TestDocumentService_Update(t *testing.T) {
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	result, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:      doc.ID,
@@ -335,11 +384,11 @@ func TestDocumentService_Update(t *testing.T) {
 func TestDocumentService_Update_TitleOnly(t *testing.T) {
 	doc := sampleDocument()
 	contentStore := &mockContentStore{}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		updateFn: func(ctx context.Context, d *model.Document) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	result, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:    doc.ID,
@@ -350,12 +399,12 @@ func TestDocumentService_Update_TitleOnly(t *testing.T) {
 }
 
 func TestDocumentService_Update_NotFound(t *testing.T) {
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return nil, errors.New("not found")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:    "missing",
@@ -371,10 +420,10 @@ func TestDocumentService_Update_ContentSaveFails(t *testing.T) {
 			return errors.New("minio write error")
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.Update(context.Background(), UpdateDocumentInput{
 		ID:      doc.ID,
@@ -392,14 +441,14 @@ func TestDocumentService_Delete(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		deleteFn: func(ctx context.Context, id string) error {
 			deletedDocID = id
 			return nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -419,11 +468,11 @@ func TestDocumentService_Delete_WithThumbnail(t *testing.T) {
 			return nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -438,23 +487,23 @@ func TestDocumentService_Delete_ContentDeleteFails(t *testing.T) {
 			return errors.New("minio error")
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 		deleteFn: func(ctx context.Context, id string) error { return nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), doc.ID)
 	require.NoError(t, err)
 }
 
 func TestDocumentService_Delete_NotFound(t *testing.T) {
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return nil, errors.New("not found")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	err := svc.Delete(context.Background(), "missing")
 	require.Error(t, err)
@@ -462,7 +511,7 @@ func TestDocumentService_Delete_NotFound(t *testing.T) {
 
 func TestDocumentService_List(t *testing.T) {
 	docs := []*model.Document{sampleDocument(), sampleDocument()}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		listFn: func(ctx context.Context, page model.Page) (*model.PageResult, error) {
 			return &model.PageResult{
 				Items:      docs,
@@ -473,7 +522,7 @@ func TestDocumentService_List(t *testing.T) {
 			}, nil
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	result, err := svc.List(context.Background(), model.Page{Number: 1, Size: 2})
 	require.NoError(t, err)
@@ -494,10 +543,10 @@ func TestDocumentService_GetThumbnail(t *testing.T) {
 			return []byte("png-data"), nil
 		},
 	}
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, contentStore, noopClose, noopPing), nil, nil, nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, contentStore, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetThumbnail(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -507,10 +556,10 @@ func TestDocumentService_GetThumbnail(t *testing.T) {
 func TestDocumentService_GetThumbnail_Nil(t *testing.T) {
 	doc := sampleDocument() // ThumbnailID is nil
 
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetThumbnail(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -522,10 +571,10 @@ func TestDocumentService_GetThumbnail_Empty(t *testing.T) {
 	doc := sampleDocument()
 	doc.ThumbnailID = &emptyID
 
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) { return doc, nil },
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	data, err := svc.GetThumbnail(context.Background(), doc.ID)
 	require.NoError(t, err)
@@ -533,12 +582,12 @@ func TestDocumentService_GetThumbnail_Empty(t *testing.T) {
 }
 
 func TestDocumentService_GetThumbnail_DocNotFound(t *testing.T) {
-	docStore := &mockDocumentRepo{
+	docStore := &mockDocumentStore{
 		getByIDFn: func(ctx context.Context, id string) (*model.Document, error) {
 			return nil, fmt.Errorf("not found")
 		},
 	}
-	svc := NewDocumentService(store.New(docStore, nil, noopClose, noopPing), nil, docSvcLogger())
+	svc := NewDocumentService(store.New(docStore, nil, noopVectorStore, noopClose, noopPing), nil, nil, nil, nil, docSvcLogger())
 
 	_, err := svc.GetThumbnail(context.Background(), "missing")
 	require.Error(t, err)

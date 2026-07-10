@@ -15,14 +15,16 @@ import (
 type HealthCheck func(ctx context.Context) error
 
 type Handler struct {
-	docService   service.DocumentService
-	log          *slog.Logger
+	docService  service.DocumentService
+	chatService service.ChatService
+	log         *slog.Logger
 	healthChecks map[string]HealthCheck
 }
 
-func New(docService service.DocumentService, log *slog.Logger) *Handler {
+func New(docService service.DocumentService, chatService service.ChatService, log *slog.Logger) *Handler {
 	return &Handler{
 		docService:   docService,
+		chatService:  chatService,
 		log:          log,
 		healthChecks: make(map[string]HealthCheck),
 	}
@@ -45,6 +47,10 @@ func (h *Handler) RegisterRoutes(app *fiber.App) {
 	docs.Get("/:id/thumbnail", h.getDocumentThumbnail)
 	docs.Put("/:id", h.updateDocument)
 	docs.Delete("/:id", h.deleteDocument)
+
+	chat := app.Group("/api/chat")
+	chat.Get("/stream", h.chatStream)
+	chat.Post("/messages", h.chatMessages)
 }
 
 func ErrorHandler(log *slog.Logger) fiber.ErrorHandler {
@@ -114,7 +120,7 @@ func (h *Handler) listDocuments(c *fiber.Ctx) error {
 
 	result, err := h.docService.List(c.Context(), p)
 	if err != nil {
-		h.log.Error("failed to list documents", "error", err.Error())
+		h.log.Error("failed to list documents", "error", err)
 		return apperror.Internal("failed to list documents")
 	}
 
@@ -161,7 +167,7 @@ func (h *Handler) createDocument(c *fiber.Ctx) error {
 		ContentType: contentType,
 	})
 	if err != nil {
-		h.log.Error("failed to create document", "error", err.Error())
+		h.log.Error("failed to create document", "error", err)
 		return apperror.Internal("failed to create document")
 	}
 
@@ -180,7 +186,7 @@ func (h *Handler) getDocument(c *fiber.Ctx) error {
 
 	content, err := h.docService.GetContent(c.Context(), id)
 	if err != nil {
-		h.log.Error("failed to get document content", "error", err.Error())
+		h.log.Error("failed to get document content", "error", err)
 		content = []byte{}
 	}
 
@@ -199,7 +205,7 @@ func (h *Handler) downloadDocument(c *fiber.Ctx) error {
 
 	content, err := h.docService.GetContent(c.Context(), id)
 	if err != nil {
-		h.log.Error("failed to get document content", "error", err.Error())
+		h.log.Error("failed to get document content", "error", err)
 		return apperror.Internal("failed to get document content")
 	}
 
@@ -255,7 +261,7 @@ func (h *Handler) updateDocument(c *fiber.Ctx) error {
 		Content: content,
 	})
 	if err != nil {
-		h.log.Error("failed to update document", "error", err.Error())
+		h.log.Error("failed to update document", "error", err)
 		return apperror.Internal("failed to update document")
 	}
 
@@ -266,7 +272,7 @@ func (h *Handler) deleteDocument(c *fiber.Ctx) error {
 	id := c.Params("id")
 
 	if err := h.docService.Delete(c.Context(), id); err != nil {
-		h.log.Error("failed to delete document", "error", err.Error())
+		h.log.Error("failed to delete document", "error", err)
 		return apperror.Internal("failed to delete document")
 	}
 

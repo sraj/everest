@@ -73,7 +73,7 @@ docker-up:
 # Start infrastructure services only (for local backend/frontend dev)
 docker-infra:
 	@echo "Starting infrastructure services (PostgreSQL, MinIO, Bifrost)..."
-	@docker compose up -d --build postgres minio bifrost
+	@docker compose up -d --build postgres minio chromadb bifrost
 
 # Stop docker services
 docker-down:

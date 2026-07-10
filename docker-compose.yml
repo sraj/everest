@@ -65,6 +65,10 @@ services:
       MINIO_USE_SSL: "false"
       AI_TAGGER_ENABLED: "true"
       AI_TAGGER_MODEL: "openai/gpt-4o-mini"
+      BIFROST_ENDPOINT: "http://bifrost:8080"
+      EMBEDDING_ENABLED: "true"
+      EMBEDDING_MODEL: "openai/text-embedding-3-small"
+      CHROMA_ENDPOINT: "http://chromadb:8000"
     ports:
       - "8080:8080"
     depends_on:
@@ -96,6 +100,23 @@ services:
     depends_on:
       - backend
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: everest-chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /chroma/chroma
+      ANONYMIZED_TELEMETRY: "FALSE"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/localhost/8000; echo -e \"GET /api/v2/heartbeat HTTP/1.0\\r\\n\\r\\n\" >&3; read -t 5 line <&3; [[ \"$$line\" == *200* ]]'"]
+      interval: 10s
+      start_period: 15s
+      retries: 3
+
   bifrost:
     image: maximhq/bifrost:latest
     container_name: everest-bifrost
@@ -107,7 +128,47 @@ services:
       - bifrost_data:/app/data
       - ./bifrost-config.json:/app/data/config.json:ro
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: everest-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 24h
+    # Uncomment for GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      start_period: 20s
+      retries: 3
+
+  # Pull embedding model on startup
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: everest-ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      ollama pull nomic-embed-text;
+      exit 0;
+      "
+    environment:
+      OLLAMA_HOST: ollama:11434
+
 volumes:
   postgres_data:
   minio_data:
+  chroma_data:
   bifrost_data:
+  ollama_data:

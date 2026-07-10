@@ -12,10 +12,12 @@ import (
 	handlergrpc "github.com/sraj/everest/internal/handler/grpc"
 	"github.com/sraj/everest/internal/apperror"
 	"github.com/sraj/everest/internal/config"
+	"github.com/sraj/everest/internal/datastore/chroma"
 	"github.com/sraj/everest/internal/datastore/minio"
 	"github.com/sraj/everest/internal/datastore/postgres"
 	"github.com/sraj/everest/internal/service"
 	"github.com/sraj/everest/internal/store"
+	"github.com/sraj/everest/internal/version"
 	"github.com/sraj/everest/pkg/dbx"
 	"github.com/sraj/everest/pkg/jobs"
 	"github.com/sraj/everest/pkg/logger"
@@ -97,13 +99,27 @@ func (a *App) Run() error {
 	}
 
 	docStore := postgres.NewDocumentStore(a.db)
-	st := store.New(docStore, contentStore, a.db.Close, a.db.Ping)
+
+	vectorStore, err := chroma.NewVectorStore(context.Background(), chroma.Config{
+		Endpoint:   a.cfg.ChromaEndpoint,
+		Collection: a.cfg.ChromaCollection,
+	})
+	if err != nil {
+		return fmt.Errorf("chroma: %w", err)
+	}
+	defer vectorStore.Close()
+	a.log.Info("connected to ChromaDB")
+
+	st := store.New(docStore, contentStore, vectorStore, a.db.Close, a.db.Ping)
 
 	thumbnailSvc := service.NewThumbnailService(service.DefaultThumbnailConfig(), a.log)
 	defer thumbnailSvc.Close()
 
 	tagger := service.NewTagger(service.DefaultTaggerConfig(), a.log)
 	defer tagger.Close()
+
+	embeddingSvc := service.NewEmbedding(service.DefaultEmbeddingConfig(), a.log)
+	defer embeddingSvc.Close()
 
 	pool := jobs.New(jobs.Config{
 		Workers:     4,
@@ -120,15 +136,20 @@ func (a *App) Run() error {
 	})
 	defer pool.Shutdown(30 * time.Second)
 
-	docService := service.NewDocumentService(st, thumbnailSvc, tagger, pool, a.log)
+	docService := service.NewDocumentService(st, thumbnailSvc, tagger, embeddingSvc, pool, a.log)
 
-	httpHandler := handlerhttp.New(docService, a.log)
+	chatService := service.NewChatService(service.DefaultChatConfig(), st.Vector(), embeddingSvc, a.log)
+
+	httpHandler := handlerhttp.New(docService, chatService, a.log)
 	httpHandler.AddHealthCheck("database", func(ctx context.Context) error {
 		return a.db.Ping(ctx)
 	})
 	httpHandler.AddHealthCheck("storage", func(ctx context.Context) error {
 		_, err := minioClient.BucketExists(ctx, a.cfg.MinIOBucket)
 		return err
+	})
+	httpHandler.AddHealthCheck("chromadb", func(ctx context.Context) error {
+		return vectorStore.(interface{ Ping(context.Context) error }).Ping(ctx)
 	})
 
 	grpcHandler := handlergrpc.New(docService, a.log)
